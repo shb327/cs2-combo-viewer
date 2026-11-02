@@ -1,0 +1,9 @@
+# Extracted game assets stay local
+assets/
+
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
