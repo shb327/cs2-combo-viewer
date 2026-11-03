@@ -1,11 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { cachedJson } from '@/lib/cached-json'
-import { DB_URL } from '@/lib/config'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
+import { LOCAL_DB } from '@/lib/data/local-db'
 
-/** How long a fetched db.json is reused before asking for it again. */
-const DB_MAX_AGE = 3 * 60 * 60 * 1000
-
-/** The parts of db.json (IDBSkins) the viewer reads: market names, images and in-game rarities. */
+/** The parts of the item database the viewer reads: market names, images and in-game rarities (a local stand-in for now). */
 interface DbPaint { image?: string; rarity?: number }
 interface DbData {
   weapons?: Record<string, { paints?: Record<string, DbPaint> }>
@@ -50,14 +46,7 @@ const sized = (url: string | undefined) => (url && url.includes('/economy/image/
 
 
 export function DbProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<DbData | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    cachedJson<DbData>(DB_URL, DB_MAX_AGE)
-      .then((data) => { if (!cancelled) setDb(data) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
+  const db: DbData = LOCAL_DB
   const images = useMemo<DbImages>(() => db ? {
     skin: (defindex, paintIndex) => defindex === undefined || paintIndex === undefined ? undefined : sized(db.weapons?.[defindex]?.paints?.[paintIndex]?.image),
     sticker: (index) => db.stickers?.[index]?.image_akamaihd ?? sized(db.stickers?.[index]?.image),

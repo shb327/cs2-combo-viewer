@@ -1,4 +1,3 @@
-import { IMAGE_PROXY } from '@/lib/config'
 import qrcode from 'qrcode-generator'
 import type { ShareCard } from '@/lib/share-card'
 
@@ -42,8 +41,6 @@ export const DEFAULT_CARD_STYLE: CardStyle = {
   show: { details: true, attachments: true, qr: true },
 }
 
-/** Our watermark: always on the image. */
-const BRAND = 'chainskins.net'
 const FONT = '"Geist Variable", "Geist", system-ui, sans-serif'
 const MONO = 'ui-monospace, "SF Mono", Menlo, monospace'
 
@@ -72,8 +69,8 @@ function mix(a: string, b: string, t: number): string {
   return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')
 }
 
-/** Steam's images, through the CORS proxy; ours (and data URLs) as they are. */
-const corsUrl = (src: string) => (/^https:\/\/[^/]*(steamstatic\.com|akamaihd\.net)\//.test(src) ? IMAGE_PROXY + encodeURIComponent(src) : src)
+/** Images are loaded as they are: ours, or data URLs. */
+const corsUrl = (src: string) => src
 
 /** Loads an image cross-origin, so the canvas stays exportable; one whose host doesn't allow it is left out. */
 const loadImage = (src: string) => new Promise<HTMLImageElement | null>((resolve) => {
@@ -319,23 +316,15 @@ export async function drawShareImage(item: HTMLCanvasElement, card: ShareCard, s
     fitText(ctx, a.pattern !== null && a.pattern !== undefined ? `${name} #${a.pattern}` : name, tx, y + tile + 26 * u, tile)
   })
 
-  /** The QR code of the link (bottom right) and the brand, always: beside the QR code on a wide image, else top right. */
+  /** The QR code of the link (bottom right), with its caption beside it on a wide image. */
   if (qrSize) drawQr(ctx, link, W - P - qrSize, H - P - qrSize, qrSize)
-  ctx.textAlign = 'right'
-  ctx.font = `700 ${(landscape ? 38 : 30) * u}px ${FONT}`
-  ctx.fillStyle = '#ffffff'
-  if (landscape) {
-    const right = qrSize ? W - P - qrSize - 28 * u : W - P
-    ctx.fillText(BRAND, right, H - P - (qrSize ? 60 : 30) * u)
-    if (qrSize) {
-      ctx.font = `500 ${20 * u}px ${FONT}`
-      ctx.fillStyle = 'rgba(255,255,255,0.6)'
-      ctx.fillText('Scan to open it in 3D', right, H - P - 26 * u)
-    }
-  } else {
-    ctx.fillText(BRAND, W - P, P + 26 * u)
+  if (landscape && qrSize) {
+    ctx.textAlign = 'right'
+    ctx.font = `500 ${20 * u}px ${FONT}`
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.fillText('Scan to open it in 3D', W - P - qrSize - 28 * u, H - P - 26 * u)
+    ctx.textAlign = 'left'
   }
-  ctx.textAlign = 'left'
   return canvas
 }
 

@@ -13,12 +13,6 @@ export const SEED_MAX = 1000
 export const DEFAULT_FLOAT = 0
 
 
-export const DB_URL = 'https://chainskins.net/db.json'
-
-
-export const IMAGE_PROXY = 'https://services.chainskins.net/image?url='
-
-
 export const WEB_ORIGIN: string = (() => {
   const domain = (import.meta.env.VITE_WEB_DOMAIN as string | undefined)?.trim().replace(/\/+$/, '')
   if (!domain) return window.location.origin

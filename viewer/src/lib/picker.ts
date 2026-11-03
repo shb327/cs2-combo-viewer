@@ -15,30 +15,30 @@ export interface PickerCategory {
   label: string
   types?: string[]
   icon: CategoryIcon
-  /** An item image for the category, over the generic icon: a name in public/icons/categories, or a full URL. */
+  /** An item image for the category, over the generic icon: a full URL. */
   image?: string
 }
 
 export const CATEGORIES: PickerCategory[] = [
   { label: 'All', icon: 'grid' },
-  { label: 'Rifles', types: ['Rifle'], icon: 'rifle', image: 'weapon_7' },
-  { label: 'Snipers', types: ['Sniper Rifle'], icon: 'target', image: 'weapon_9' },
-  { label: 'Pistols', types: ['Pistol'], icon: 'pistol', image: 'weapon_1' },
-  { label: 'SMGs', types: ['SMG'], icon: 'rifle', image: 'weapon_19' },
-  { label: 'Heavy', types: ['Shotgun', 'Machinegun'], icon: 'rifle', image: 'weapon_35' },
-  { label: 'Knives', types: ['Knife'], icon: 'knife', image: 'weapon_507' },
-  { label: 'Gloves', types: ['Gloves'], icon: 'glove', image: 'weapon_5030' },
-  { label: 'Zeus x27', types: ['Equipment'], icon: 'cube', image: 'weapon_31' },
-  { label: 'Stickers', icon: 'sticker', image: 'sticker_crown_foil' },
-  { label: 'Charms', icon: 'charm', image: 'collection_missing_link_charm_collection' },
-  { label: 'Patches', icon: 'patch', image: 'https://community.fastly.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXT4BhcJo8h5hhcX0nYS-WhztecQ1xgJgxovrakJx547PvNcC9W_5LnltbZlvKiZOnVkjoH65Ili-qTodSh3gDnqEVoNmqmIoKcJFNoZwvR5BHglpDx_aDO/256fx192f' },
-  { label: 'Pins', icon: 'pin', image: 'https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXQ9Q1LO5kNoBhSQl-fROuh28rQR1R2KQFoprOrFA9vxP-GcjxH7YS1kdLSwa6na77Vk2oDsJEk2r6Vo97w3gXg-kQ_NmCmd9OSIBh-Pw8cFMO2NA' },
-  { label: 'Pets', icon: 'pet', image: 'pet' },
-  { label: 'Agents', icon: 'agent', image: 'https://community.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXA6Q1NL4kmrAlOA0_FVPCi2t_fUkRxNztUoreaLQVp7OXJYzRD4si02tHSlKatNe-GxzoB68cgiezCrYnwjFbs-hE6amjwIYKSdlM2YV6E_1WggbC4kdowLd4/256fx192f' },
+  { label: 'Rifles', types: ['Rifle'], icon: 'rifle' },
+  { label: 'Snipers', types: ['Sniper Rifle'], icon: 'target' },
+  { label: 'Pistols', types: ['Pistol'], icon: 'pistol' },
+  { label: 'SMGs', types: ['SMG'], icon: 'rifle' },
+  { label: 'Heavy', types: ['Shotgun', 'Machinegun'], icon: 'rifle' },
+  { label: 'Knives', types: ['Knife'], icon: 'knife' },
+  { label: 'Gloves', types: ['Gloves'], icon: 'glove' },
+  { label: 'Zeus x27', types: ['Equipment'], icon: 'cube' },
+  { label: 'Stickers', icon: 'sticker' },
+  { label: 'Charms', icon: 'charm' },
+  { label: 'Patches', icon: 'patch' },
+  { label: 'Pins', icon: 'pin' },
+  { label: 'Pets', icon: 'pet' },
+  { label: 'Agents', icon: 'agent' },
 ]
 
-/** Where a category's image comes from: a full URL as is, a name from public/icons/categories. */
-export const categoryImageUrl = (image: string) => (/^https?:\/\//.test(image) ? image : `${import.meta.env.BASE_URL}icons/categories/${image}.png`)
+/** Where a category's image comes from: a full URL, as is. */
+export const categoryImageUrl = (image: string) => image
 
 export const RARITY_COLOR: Record<string, string> = {
   common: '#b0c3d9', uncommon: '#5e98d9', rare: '#4b69ff', mythical: '#8847ff', legendary: '#d32ce6', ancient: '#eb4b4b', immortal: '#e4ae39',
