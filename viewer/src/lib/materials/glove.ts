@@ -2,9 +2,11 @@ import * as THREE from 'three'
 import { texXform } from '@/lib/materials/weapon'
 import type { GloveItem } from '@/lib/data/items'
 import type { RandomFloat } from '@/lib/data/rng'
-import { VIEWER_DATA } from '@/lib/data/catalog'
+import { uniformValue, type ExprContext } from '@/lib/materials/composite'
+import type { Value } from '@/lib/materials/composite-expr'
+import { GLOVE_VS_TYPES, GloveTargets, gloveVertexShader, type GloveProgram } from '@/lib/materials/glove-shared'
 
-/** A material dumped by steam-tools/cs2-3d-pipeline/vmat_to_json.py. */
+/** A glove paint's material (the kit's vmat): its features, values and textures. */
 export interface Vmat {
   shader: string
   ints: Record<string, number>
@@ -13,43 +15,17 @@ export interface Vmat {
   textures: Record<string, string>
 }
 
-const VERT = `
+/** The material's static features (F_*), which pick the compositor's combo. */
+export const vmatFeatures = (vmat: Vmat): Record<string, number> =>
+  Object.fromEntries(Object.entries(vmat.ints).filter(([k]) => k.startsWith('F_')))
+
+const COPY_VERT = `
 in vec3 position;
-uniform vec2 uUvOffset;
 out vec2 vUv;
 void main() {
-  vUv = uUvOffset + position.xy * 0.5 + 0.5;
+  vUv = position.xy * 0.5 + 0.5;
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`
-
-/**
- * The glove composite shader (the game's csgo_customglove, ported by the asset pipeline) and its parameter defaults.
- * Both are derived from the game's shader, so they live with the assets, not in the repository: loaded once, at runtime.
- */
-let frag = ''
-/** The shader's uniforms and their GLSL types. */
-let DECLARED: { type: string; name: string }[] = []
-let DEFAULTS: Record<string, number[] | string | null> = {}
-let shaderRequest: Promise<void> | null = null
-
-export function loadGloveShader(assetBase: string): Promise<void> {
-  const dir = assetBase + VIEWER_DATA + 'shaders/'
-  const get = (name: string) => fetch(dir + name).then((r) => {
-    if (!r.ok) throw new Error(`${name}: HTTP ${r.status} (run the pipeline's glove shader step)`)
-    return r.text()
-  })
-  shaderRequest ??= Promise.all([get('customglove.frag.glsl'), get('customglove.defaults.json')]).then(([source, defaults]) => {
-    frag = source.replace(/\r\n/g, '\n')
-    DECLARED = [...frag.matchAll(/^uniform (?:highp )?(\w+) (\w+);$/gm)].map(([, type, name]) => ({ type, name }))
-    DEFAULTS = JSON.parse(defaults) as Record<string, number[] | string | null>
-  })
-  shaderRequest.catch(() => { shaderRequest = null })
-  return shaderRequest
-}
-
-const SIZE = 2048
-
-/** A texture placement as the composite's two affine rows: uv' = (dot(uv, r0.xy) + r0.w, dot(uv, r1.xy) + r1.w). */
 
 const COPY_FRAG = `
 precision highp float;
@@ -59,12 +35,10 @@ out vec4 oColor;
 void main() { oColor = texture(uSrc, vUv); }`
 
 /**
- * WebGL allows 16 textures per pass and the composite uses 21, so the per-layer sets (detail, detail
- * normal, damage normal, grunge — 1 to 4) go into 4-layer texture arrays, copied on the GPU (a 2D
- * canvas would premultiply the alpha and wipe normals stored with alpha 0).
+ * WebGL allows 16 textures per pass and the glove compositor uses up to 37, so its per-layer families (1 to 4) go into
+ * 4-layer texture arrays (the pipeline rewrites the shader to match), copied on the GPU: a 2D canvas would
+ * premultiply the alpha and wipe normals stored with alpha 0.
  */
-export const LAYER_SETS = ['g_tDetail', 'g_tDetailNormal', 'g_tDamageNormal', 'g_tGrunge'] as const
-
 export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[]): { texture: THREE.Texture; dispose: () => void } {
   const { width, height } = layers[0].image as { width: number; height: number }
   const target = new THREE.WebGLArrayRenderTarget(width, height, layers.length, {
@@ -72,8 +46,8 @@ export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[
   })
   target.texture.wrapS = target.texture.wrapT = THREE.RepeatWrapping
   const copy = new THREE.RawShaderMaterial({
-    glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: COPY_FRAG, depthTest: false, depthWrite: false,
-    uniforms: { uSrc: { value: null }, uUvOffset: { value: new THREE.Vector2() } },
+    glslVersion: THREE.GLSL3, vertexShader: COPY_VERT, fragmentShader: COPY_FRAG, depthTest: false, depthWrite: false,
+    uniforms: { uSrc: { value: null } },
   })
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), copy)
   const camera = new THREE.Camera()
@@ -89,12 +63,19 @@ export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[
   return { texture: target.texture, dispose: () => target.dispose() }
 }
 
+/**
+ * A classic glove finish (csgo_customglove without F_BACKWARDS_COMPATIBILITY): the game's compositor, run once per output
+ * mode on this hand's UVs, then resolved into the material's maps. The seed placement, the hand's flip and the wear curve
+ * are set here; every other parameter is the material's value, the shader's default, or the shader's own expression.
+ */
 export class GloveFinish {
   readonly material: THREE.MeshPhysicalMaterial
-  private readonly target: THREE.WebGLRenderTarget
-  private readonly composite: THREE.RawShaderMaterial
+  private readonly targets: GloveTargets
+  private readonly program: THREE.RawShaderMaterial
   private readonly quad: THREE.Mesh
   private readonly camera = new THREE.Camera()
+  /** Values set by the seed and the float, over the material's. */
+  private readonly overrides: Record<string, Value> = {}
   private dirty = true
 
   constructor(
@@ -102,60 +83,52 @@ export class GloveFinish {
     private readonly vmat: Vmat,
     textures: Record<string, THREE.Texture>,
     readonly side: 'left' | 'right',
+    private readonly shader: GloveProgram,
   ) {
-    if (!frag) throw new Error('The glove shader is not loaded (loadGloveShader)')
+    const { combo } = shader
     const uniforms: Record<string, THREE.IUniform> = {
       uUvOffset: { value: new THREE.Vector2(side === 'right' ? -1 : 0, 0) },
     }
-    for (const { type, name } of DECLARED) {
-      uniforms[name] = { value: type.startsWith('sampler') ? textures[name] ?? null : this.paramValue(type, name) }
-    }
-    this.composite = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3, vertexShader: VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false,
+    for (const [name] of combo.uniforms) uniforms[name] = { value: null }
+    for (const name of combo.textures) uniforms[name] = { value: textures[name] ?? null }
+    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[name] ??= { value: null }
+    this.program = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: gloveVertexShader(combo.inputs), fragmentShader: shader.frag, uniforms,
+      depthTest: false, depthWrite: false,
     })
-    this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.composite)
+    this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.program)
     this.quad.frustumCulled = false
-
-    this.target = new THREE.WebGLRenderTarget(SIZE, SIZE, {
-      count: 4, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping,
-    })
-    const [albedo, normal, orm, cloth] = this.target.textures
-    for (const t of this.target.textures) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace }
-    const sheen = vmat.floats.g_flSheenScale ?? (DEFAULTS.g_flSheenScale as number[])[0]
-    this.material = new THREE.MeshPhysicalMaterial({
-      map: albedo, normalMap: normal, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1,
-      sheen: 1, sheenColor: new THREE.Color(1, 1, 1).multiplyScalar(Math.min(1, sheen * 0.5)), sheenColorMap: cloth, sheenRoughness: 0.6,
-    })
+    this.targets = new GloveTargets(this.number('g_flSheenScale'))
+    this.material = this.targets.material
   }
 
-  /** A shader uniform's value: the material's, derived, or the shader's default. */
-  private paramValue(type: string, name: string): unknown {
+  /** A scalar parameter: the material's value, else the shader's default. */
+  private number(name: string): number {
     const v = this.vmat
-    const num = (n: string, i = 0) => v.floats[n] ?? v.ints[n] ?? v.vectors[n]?.[i] ?? (DEFAULTS[n] as number[] | undefined)?.[i] ?? 0
-    const blackPoint = /^g_fDetailBlackPointCompensation(\d)$/.exec(name)
-    if (blackPoint) return 1 - num('g_fDetailBlackPoint' + blackPoint[1])
-    switch (name) {
-      case 'g_bPattern': return v.ints.F_PATTERN ? 1 : 0
-      case 'g_nOutputMode': return 0
-      case 'g_fWearProgress': return 0
-      case 'g_fFlipFixup': return this.flip ? -1 : 1
-      case 'g_fPaintShadowPower': return Math.max(0.01, num('g_fPaintThickness') * 0.15)
-      case 'g_nPatternReplaceIndex': return num('g_nPatternReplaceIndex') - 1
+    return v.floats[name] ?? v.ints[name] ?? v.vectors[name]?.[0] ?? this.shader.table.ps[name]?.default?.[0] ?? 0
+  }
+
+  private context(): ExprContext {
+    const v = this.vmat
+    const table = this.shader.table
+    const param = (name: string): Value => {
+      if (name in this.overrides) return this.overrides[name]
+      if (name === 'g_bFlipFixup') return this.flip ? 1 : 0
+      if (name.startsWith('g_t')) return name
+      if (name in v.vectors) return v.vectors[name]
+      if (name in v.floats) return v.floats[name]
+      if (name in v.ints) return v.ints[name]
+      const d = table.ps[name]?.default ?? table.vs[name]?.default
+      const n = table.ps[name]?.elements ?? table.vs[name]?.elements ?? 1
+      return d ? (n > 1 ? d.slice(0, n) : d[0]) : 0
     }
-    if (/TexCoordXform|TexRotationXform/.test(name)) return new THREE.Vector4()
-    const vec = v.vectors[name] ?? (Array.isArray(DEFAULTS[name]) ? (DEFAULTS[name] as number[]) : [num(name)])
-    switch (type) {
-      case 'vec2': return new THREE.Vector2(vec[0], vec[1] ?? 0)
-      case 'vec3': return new THREE.Vector3(vec[0], vec[1] ?? 0, vec[2] ?? 0)
-      case 'vec4': case 'ivec4': return new THREE.Vector4(vec[0], vec[1] ?? 0, vec[2] ?? 0, vec[3] ?? 0)
-      default: return num(name)
-    }
+    return { param, ext: param, feature: (i) => Number(v.ints[table.features[i]] ?? 0) }
   }
 
   setFloat(f: number): void {
     /** The paint wears as the float raised to the kit's g_fWearExponent (Vice 0.5, Pandora's Box 1, Duct Tape 0.2): its vcompmat's wear curve. */
     const exponent = this.vmat.floats.g_fWearExponent ?? this.vmat.ints.g_fWearExponent ?? 1
-    this.composite.uniforms.g_fWearProgress.value = Math.pow(Math.max(0, f), exponent)
+    this.overrides.g_fWearProgress = Math.pow(Math.max(0, f), exponent)
     this.dirty = true
   }
 
@@ -172,30 +145,29 @@ export class GloveFinish {
 
   /**
    * The seed's rolls (gloves/paints/_shared_paint_generic.vcompmat; a kit's own instance_params only sets the bounds of the
-   * ones it names — Hedge Maze and Pandora's Box fix the rotation at 30): pattern offset x/y, pattern rotation, then the
-   * grunge offset x/y and rotation. The grunge is what wears the paint away, so where it wears follows the seed (skincraft.gg:
-   * Hedge Maze at 0.8 wear differs between seeds).
+   * ones it names — Hedge Maze and Pandora's Box fix the rotation at 30, Crimson Kimono at 25.2): pattern offset x/y,
+   * pattern rotation, then the grunge offset x/y and rotation. The grunge is what wears the paint away, so where it
+   * wears follows the seed.
    * The pattern is the shader's transform (texXform; g_bFlipFixup negates the rotation, and the shader negates u) on
    * u ∈ [0, 1], and the right hand's result has its x negated (the shader's p.x *= sign(u)). This composite runs the
-   * right hand on u ∈ [−1, 0], hence its +1 shift. Matched against skinshotter's composites (Pandora, Cobalt Skulls,
-   * both hands). The stream is this hand's own (see SkinViewer.setSeed).
+   * right hand on u ∈ [−1, 0], hence its +1 shift. The stream is this hand's own (see SkinViewer.setSeed).
    */
   setSeed(r: RandomFloat): void {
     const px = r(0, 1), py = r(0, 1), prot = r(0, 360)
     const gx = r(0, 1), gy = r(0, 1), grot = r(0, 360)
-    const u = this.composite.uniforms
-    const f = (n: string) => this.vmat.floats[n] ?? (DEFAULTS[n] as number[])[0]
     const rot = this.item.patternRotation ?? prot
     const flip = this.flip
     const right = this.side === 'right'
-    const set = (name: string, [x0, x1]: [THREE.Vector4, THREE.Vector4]) => { u[name + '0'].value = x0; u[name + '1'].value = x1 }
-    const [x0, x1] = texXform(f('g_fPatternTexCoordScale'), flip ? -rot : rot, [px, py])
+    const o = this.overrides
+    const vec = (x: THREE.Vector4) => [x.x, x.y, x.z, x.w]
+    const set = (name: string, [x0, x1]: [THREE.Vector4, THREE.Vector4]) => { o[name + '0'] = vec(x0); o[name + '1'] = vec(x1) }
+    const [x0, x1] = texXform(this.number('g_fPatternTexCoordScale'), flip ? -rot : rot, [px, py])
     const shift = right ? (flip ? -1 : 1) : 0
     const sign = right ? -1 : 1
-    u.g_vPatternTexCoordXform0.value = new THREE.Vector4(sign * x0.x, sign * x0.y, 0, sign * (x0.w + shift * x0.x))
-    u.g_vPatternTexCoordXform1.value = new THREE.Vector4(x1.x, x1.y, 0, x1.w + shift * x1.x)
+    o.g_vPatternTexCoordXform0 = [sign * x0.x, sign * x0.y, 0, sign * (x0.w + shift * x0.x)]
+    o.g_vPatternTexCoordXform1 = [x1.x, x1.y, 0, x1.w + shift * x1.x]
     set('g_vPatternTexRotationXform', texXform(1, flip ? rot : -rot, [0, 0]))
-    set('g_vGrungeTexCoordXform', texXform(f('g_fGrungeTexCoordScale'), grot, [gx, gy]))
+    set('g_vGrungeTexCoordXform', texXform(this.number('g_fGrungeTexCoordScale'), grot, [gx, gy]))
     set('g_vGrungeTexRotationXform', texXform(1, -grot, [0, 0]))
     this.dirty = true
   }
@@ -204,16 +176,20 @@ export class GloveFinish {
   update(renderer: THREE.WebGLRenderer): void {
     if (!this.dirty) return
     this.dirty = false
-    const previous = renderer.getRenderTarget()
-    renderer.setRenderTarget(this.target)
-    renderer.render(this.quad, this.camera)
-    renderer.setRenderTarget(previous)
+    const u = this.program.uniforms
+    const ctx = this.context()
+    const table = this.shader.table
+    for (const [name, type] of this.shader.combo.uniforms) {
+      // The seed's and the float's values win over the shader's own expressions for them.
+      u[name].value = uniformValue(name in this.overrides ? undefined : table.ps[name], name, type, ctx)
+    }
+    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[name].value = uniformValue(table.vs[name], name, type, ctx)
+    this.targets.render(renderer, this.quad, this.program, this.camera)
   }
 
   dispose(): void {
-    this.material.dispose()
-    this.composite.dispose()
+    this.targets.dispose()
+    this.program.dispose()
     this.quad.geometry.dispose()
-    this.target.dispose()
   }
 }

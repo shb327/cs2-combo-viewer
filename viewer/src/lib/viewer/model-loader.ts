@@ -5,7 +5,8 @@ import { GAME_ROOT, VIEWER_DATA, type DrawCall } from '@/lib/data/catalog'
 import { SHARED, type GloveItem } from '@/lib/data/items'
 import { kitRolls, valveRandom, weaponRolls } from '@/lib/data/rng'
 import { WeaponComposite } from '@/lib/materials/composite'
-import { GloveFinish, LAYER_SETS, loadGloveShader, packLayers, type Vmat } from '@/lib/materials/glove'
+import { GloveFinish, packLayers, vmatFeatures, type Vmat } from '@/lib/materials/glove'
+import { comboSets, fallbackTexture, isSrgb, loadGloveProgram } from '@/lib/materials/glove-shared'
 import { GloveV2Finish } from '@/lib/materials/glove2'
 import { WeaponFinish, type WeaponItem } from '@/lib/materials/weapon'
 import { loadPatchSlots, PatchLayer } from '@/lib/viewer/agent-patches'
@@ -276,15 +277,20 @@ export class ModelLoader {
     const group = new RegExp(fp?.group ?? 'viewmodel')
     const t = this.textures
     const src = item ?? fp!.arms
-    if (item && !item.v2) await loadGloveShader(this.opts.assetBase)
     const vmat = !item ? null : typeof item.vmat === 'string' ? await (await fetch(t.url(item.vmat))).json() as Vmat : item.vmat
-    const entries = await Promise.all(Object.entries(vmat?.textures ?? {}).map(async ([name, path]) =>
-      [name, await t.load(item!.textureRoot + path.replace(/\.vtex$/, '.png'), false)] as const))
+    /** Classic gloves: the game's compositor combo for the paint's features. */
+    const classic = item && !item.v2 && vmat ? await loadGloveProgram(this.opts.assetBase, vmatFeatures(vmat)) : null
+    const entries = !classic ? [] : await Promise.all(Object.entries(vmat!.textures).map(async ([name, path]) =>
+      [name, await t.load(item!.textureRoot + path.replace(/\.vtex$/, '.png'), isSrgb(classic, name))] as const))
     const textures: Record<string, THREE.Texture> = Object.fromEntries(entries)
-    for (const set of !item || item.v2 ? [] : LAYER_SETS) {
-      const packed = packLayers(this.renderer, [1, 2, 3, 4].map((i) => textures[set + i]))
-      textures[set] = packed.texture
-      this.sink.disposables.push(packed.dispose)
+    if (classic) {
+      const sets = comboSets(classic)
+      for (const name of classic.combo.textures) if (!sets.includes(name)) textures[name] ??= fallbackTexture(name)
+      for (const set of sets) {
+        const packed = packLayers(this.renderer, [1, 2, 3, 4].map((i) => textures[set + i] ?? fallbackTexture(set + i)))
+        textures[set] = packed.texture
+        this.sink.disposables.push(packed.dispose)
+      }
     }
     const scene = (await this.gltf.loadAsync(t.url(src.model))).scene
     if (src.drawCalls) nameDrawCalls(scene, src.drawCalls)
@@ -310,7 +316,7 @@ export class ModelLoader {
     }
     const finishFor = (side: 'left' | 'right' | 'arm') => {
       if (side === 'arm') throw new Error('arms have no glove finish')
-      if (!finishes[side]) { finishes[side] = new GloveFinish(item!, vmat!, textures, side); this.sink.finishes.push(finishes[side]!) }
+      if (!finishes[side]) { finishes[side] = new GloveFinish(item!, vmat!, textures, side, classic!); this.sink.finishes.push(finishes[side]!) }
       return finishes[side]!
     }
     const root = new THREE.Group()
