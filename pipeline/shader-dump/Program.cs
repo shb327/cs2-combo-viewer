@@ -25,7 +25,23 @@ static class Program
     {
         try
         {
-            var opts = ParseArgs(args);
+            if (args.Length > 0 && args[0] == "list")
+            {
+                // Every file in the VPK, one game path per line.
+                var l = ParseArgs(args[1..], ["vpk", "out"]);
+                using var package = new Package();
+                package.Read(Inside(SourceRoot, l["vpk"], "--vpk"));
+                var lines = package.Entries!.Values.SelectMany(x => x).Select(e => e.GetFullPath()).OrderBy(x => x, StringComparer.Ordinal);
+                Write(Inside(OutputRoot, l["out"], "--out"), string.Join("\n", lines) + "\n");
+                return 0;
+            }
+            if (args.Length > 0 && args[0] == "extract")
+            {
+                var e = ParseArgs(args[1..], ["vpk", "jobs", "report"]);
+                Extract.Run(Inside(SourceRoot, e["vpk"], "--vpk"), e["jobs"], e["report"], p => Inside(OutputRoot, p, "output"));
+                return 0;
+            }
+            var opts = ParseArgs(args, ["vpk", "shader", "out"]);
             var vpk = Inside(SourceRoot, opts["vpk"], "--vpk");
             var shader = opts["shader"];
             var outDir = Inside(OutputRoot, Path.Combine(opts["out"], shader), "--out");
@@ -41,7 +57,7 @@ static class Program
         }
     }
 
-    static Dictionary<string, string> ParseArgs(string[] args)
+    static Dictionary<string, string> ParseArgs(string[] args, string[] required)
     {
         var d = new Dictionary<string, string>();
         for (var i = 0; i + 1 < args.Length; i += 2)
@@ -49,7 +65,7 @@ static class Program
             if (!args[i].StartsWith("--", StringComparison.Ordinal)) throw new ArgumentException("unexpected " + args[i]);
             d[args[i][2..]] = args[i + 1];
         }
-        foreach (var k in new[] { "vpk", "shader", "out" })
+        foreach (var k in required)
             if (!d.ContainsKey(k)) throw new ArgumentException($"--{k} is required");
         return d;
     }

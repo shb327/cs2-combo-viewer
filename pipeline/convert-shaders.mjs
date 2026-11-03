@@ -151,6 +151,8 @@ function convert(src, def, label) {
     ...(sets.length ? ['precision highp sampler2DArray;'] : []),
     ...uniforms.map(([name, type]) => `uniform ${type} ${name};`),
     ...sets.map((f) => `uniform highp sampler2DArray ${f};`),
+    // HLSL's saturate, which the decompiled code calls.
+    ...['float', 'vec2', 'vec3', 'vec4'].map((t) => `${t} saturate(${t} x) { return clamp(x, 0.0, 1.0); }`),
   ].join('\n')
   const glsl = `${head}\n${s.replace(/^\n+/, '')}`.replace(/\n{3,}/g, '\n\n')
   for (const bad of ['texture2D ', 'sampler2D(', '_Globals_', '#extension', 'Fine(']) {

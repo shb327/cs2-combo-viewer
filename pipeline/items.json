@@ -1,0 +1,12 @@
+{
+  "knives": {
+    "weapon_knife_karambit": ["am_ruby_marbleized"]
+  },
+  "gloves": {
+    "specialist_gloves": ["specialist_kimono_diamonds_red"]
+  },
+  "agents": ["customplayer_t_map_based"],
+  "firstPerson": {
+    "weapon_knife_karambit": { "idle": "idle1_karambit", "inspect": "lookat01_karambit" }
+  }
+}
