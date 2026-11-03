@@ -1,12 +1,12 @@
-import { cpSync, readdirSync, readFileSync } from 'node:fs'
+import { cpSync, createReadStream, existsSync, readdirSync, readFileSync, stat } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 
 /**
- * The build copies public/ without public/assets: the game assets (26 GB) are served from the R2 bucket
- * (VITE_ASSET_BASE, steam-tools/cs2-3d-pipeline/upload_r2.mjs); the dev server still serves them from public/.
+ * The build copies public/ without public/assets: the game assets are served from elsewhere (VITE_ASSET_BASE).
+ * In development they come from the local asset folder (localAssets below).
  */
 function publicWithoutAssets(): Plugin {
   let outDir = 'dist'
@@ -22,11 +22,42 @@ function publicWithoutAssets(): Plugin {
   }
 }
 
+/** Where the extracted assets live on this machine (outside the repo); the dev server serves them at /assets/. */
+const DEFAULT_ASSET_DIR = 'C:/cs2-data/extracted/web'
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.json': 'application/json', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.png': 'image/png',
+  '.exr': 'image/x-exr', '.hdr': 'image/vnd.radiance', '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.bin': 'application/octet-stream',
+}
+
+/** Serves /assets/* from the local asset folder in development; a file that isn't there is a 404. */
+function localAssets(dir: string): Plugin {
+  const root = path.resolve(dir)
+  return {
+    name: 'local-assets',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/assets', (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? '/').split('?')[0])
+        const file = path.resolve(root, '.' + rel)
+        if (!file.startsWith(root + path.sep)) { res.statusCode = 403; res.end(); return }
+        stat(file, (err, st) => {
+          if (err || !st.isFile()) { if (rel.endsWith('/')) next(); else { res.statusCode = 404; res.end() } return }
+          res.setHeader('Content-Type', CONTENT_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream')
+          res.setHeader('Content-Length', st.size)
+          res.setHeader('Cache-Control', 'no-cache')
+          createReadStream(file).pipe(res)
+        })
+      })
+    },
+  }
+}
+
 const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: { __APP_VERSION__: JSON.stringify(version) },
-  plugins: [react(), tailwindcss(), publicWithoutAssets()],
+  plugins: [react(), tailwindcss(), localAssets(loadEnv(mode, process.cwd(), '').CS2_ASSET_DIR || DEFAULT_ASSET_DIR), publicWithoutAssets()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   server: { port: 5320, strictPort: true, host: '127.0.0.1' },
   preview: { port: 5321, strictPort: true, host: '127.0.0.1' },
@@ -46,4 +77,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

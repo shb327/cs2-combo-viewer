@@ -1,5 +1,21 @@
-# Extracted game assets stay local
+# Game files, anything extracted from them and shader code generated from the game's shaders stay local
 assets/
+public/assets/
+extracted/
+**/generated/
+*.vpk
+*.vpk_c
+*_c
+*.vcs
+*.vfx
+*.vmat
+*.vcompmat
+*.glb
+*.gltf
+*.exr
+*.hdr
+*.glsl
+items_game.txt
 
 node_modules/
 dist/

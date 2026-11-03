@@ -2,8 +2,7 @@ import * as THREE from 'three'
 import { texXform } from '@/lib/materials/weapon'
 import type { GloveItem } from '@/lib/data/items'
 import type { RandomFloat } from '@/lib/data/rng'
-import frag from './generated/customglove.frag.glsl?raw'
-import shaderDefaults from './generated/customglove.defaults.json'
+import { VIEWER_DATA } from '@/lib/data/catalog'
 
 /** A material dumped by steam-tools/cs2-3d-pipeline/vmat_to_json.py. */
 export interface Vmat {
@@ -23,9 +22,31 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`
 
+/**
+ * The glove composite shader (the game's csgo_customglove, ported by the asset pipeline) and its parameter defaults.
+ * Both are derived from the game's shader, so they live with the assets, not in the repository: loaded once, at runtime.
+ */
+let frag = ''
 /** The shader's uniforms and their GLSL types. */
-const DECLARED = [...frag.matchAll(/^uniform (?:highp )?(\w+) (\w+);$/gm)].map(([, type, name]) => ({ type, name }))
-const DEFAULTS = shaderDefaults as Record<string, number[] | string | null>
+let DECLARED: { type: string; name: string }[] = []
+let DEFAULTS: Record<string, number[] | string | null> = {}
+let shaderRequest: Promise<void> | null = null
+
+export function loadGloveShader(assetBase: string): Promise<void> {
+  const dir = assetBase + VIEWER_DATA + 'shaders/'
+  const get = (name: string) => fetch(dir + name).then((r) => {
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status} (run the pipeline's glove shader step)`)
+    return r.text()
+  })
+  shaderRequest ??= Promise.all([get('customglove.frag.glsl'), get('customglove.defaults.json')]).then(([source, defaults]) => {
+    frag = source.replace(/\r\n/g, '\n')
+    DECLARED = [...frag.matchAll(/^uniform (?:highp )?(\w+) (\w+);$/gm)].map(([, type, name]) => ({ type, name }))
+    DEFAULTS = JSON.parse(defaults) as Record<string, number[] | string | null>
+  })
+  shaderRequest.catch(() => { shaderRequest = null })
+  return shaderRequest
+}
+
 const SIZE = 2048
 
 /** A texture placement as the composite's two affine rows: uv' = (dot(uv, r0.xy) + r0.w, dot(uv, r1.xy) + r1.w). */
@@ -82,6 +103,7 @@ export class GloveFinish {
     textures: Record<string, THREE.Texture>,
     readonly side: 'left' | 'right',
   ) {
+    if (!frag) throw new Error('The glove shader is not loaded (loadGloveShader)')
     const uniforms: Record<string, THREE.IUniform> = {
       uUvOffset: { value: new THREE.Vector2(side === 'right' ? -1 : 0, 0) },
     }

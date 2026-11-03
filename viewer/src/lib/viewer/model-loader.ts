@@ -5,7 +5,7 @@ import { GAME_ROOT, VIEWER_DATA, type DrawCall } from '@/lib/data/catalog'
 import { SHARED, type GloveItem } from '@/lib/data/items'
 import { kitRolls, valveRandom, weaponRolls } from '@/lib/data/rng'
 import { WeaponComposite } from '@/lib/materials/composite'
-import { GloveFinish, LAYER_SETS, packLayers, type Vmat } from '@/lib/materials/glove'
+import { GloveFinish, LAYER_SETS, loadGloveShader, packLayers, type Vmat } from '@/lib/materials/glove'
 import { GloveV2Finish } from '@/lib/materials/glove2'
 import { WeaponFinish, type WeaponItem } from '@/lib/materials/weapon'
 import { loadPatchSlots, PatchLayer } from '@/lib/viewer/agent-patches'
@@ -276,6 +276,7 @@ export class ModelLoader {
     const group = new RegExp(fp?.group ?? 'viewmodel')
     const t = this.textures
     const src = item ?? fp!.arms
+    if (item && !item.v2) await loadGloveShader(this.opts.assetBase)
     const vmat = !item ? null : typeof item.vmat === 'string' ? await (await fetch(t.url(item.vmat))).json() as Vmat : item.vmat
     const entries = await Promise.all(Object.entries(vmat?.textures ?? {}).map(async ([name, path]) =>
       [name, await t.load(item!.textureRoot + path.replace(/\.vtex$/, '.png'), false)] as const))
