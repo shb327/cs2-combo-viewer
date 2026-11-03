@@ -4,7 +4,12 @@ A browser 3D viewer for Counter-Strike 2 knife and glove combinations: a skinned
 
 It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site for finding good-looking glove and knife combos, where every combo page will offer a 3D view next to its screenshot.
 
-**Status:** planning. No code yet.
+**Status:** phase 1 done: a Karambit in Specialist Gloves, first person, built from the game files by our own pipeline. See the [roadmap](docs/roadmap.md).
+
+## Layout
+
+- [`viewer/`](viewer/): the browser viewer (React, TypeScript, Vite, three.js). `cd viewer; npm.cmd ci; npm.cmd run dev`.
+- [`pipeline/`](pipeline/README.md): builds the viewer's assets from copies of the game files.
 
 ## Goals
 
@@ -19,6 +24,11 @@ It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site
 - [How it works](docs/how-it-works.md): where the data comes from and how a skin is drawn.
 - [Architecture](docs/architecture.md): the planned pieces and how Combo Skin talks to them.
 - [Roadmap](docs/roadmap.md): phases, from a first rendered skin to a full combo viewer.
+- [Asset format](docs/asset-format.md): the files the viewer loads.
+
+## Credits
+
+The viewer started from the [ChainSkins 3D Viewer](https://github.com/ChainSkins/cs2-3d-viewer) (MIT, copyright 2026 ChainSkins; see [viewer/LICENSE](viewer/LICENSE) and [viewer/UPSTREAM.md](viewer/UPSTREAM.md)). The pipeline uses [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat) (MIT).
 
 ## Game assets
 

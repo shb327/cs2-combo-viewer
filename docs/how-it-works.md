@@ -9,7 +9,7 @@ How a CS2 skin gets from the game files to a browser. Notes to build on, not a f
 | Item definitions: knives, gloves, paint kits, float ranges, rarities | `scripts/items/items_game.txt` in `game/csgo/pak01_dir.vpk` |
 | Weapon and glove models, skin materials (`.vmat`), paint kit compositions (`.vcompmat`), textures | `game/csgo/pak01_dir.vpk` |
 | First-person arms, animation graphs and clips, the inspect camera table | `game/csgo/pak01_dir.vpk` |
-| Skin compositing and glove shaders | `game/csgo_core/shaders_vulkan_dir.vpk` |
+| Skin compositing and glove shaders (`csgo_customweapon`, `csgo_customglove`) | `game/csgo/shaders_vulkan_dir.vpk` |
 | Weapon and character material shaders | `game/csgo/shaders_vulkan_dir.vpk` |
 | Inspect map backgrounds: scene, lightmaps, light probes, cubemaps | `game/csgo/maps/<map>_vanity.vpk` |
 

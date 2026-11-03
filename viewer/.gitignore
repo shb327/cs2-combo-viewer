@@ -1,0 +1,10 @@
+node_modules
+dist
+public/assets
+export.log
+*.tsbuildinfo
+bucket.md
+
+# Local env overrides (asset base for development)
+.env.local
+.env.production
