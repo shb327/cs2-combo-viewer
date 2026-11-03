@@ -1,0 +1,2 @@
+/embed
+  Content-Security-Policy: frame-ancestors *

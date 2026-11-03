@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Viewer embed example</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font: 14px system-ui, sans-serif; background: #0b0b12; color: #e5e5ef; display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
+    iframe { width: 100%; height: 100%; border: 0; }
+    aside { padding: 16px; overflow: auto; border-left: 1px solid #ffffff1a; display: flex; flex-direction: column; gap: 10px; }
+    label { display: flex; flex-direction: column; gap: 4px; }
+    input, select, button { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid #ffffff26; background: #16161f; color: inherit; }
+    button { cursor: pointer; }
+    pre { white-space: pre-wrap; font-size: 12px; background: #16161f; padding: 8px; border-radius: 8px; max-height: 240px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <iframe id="viewer" src="/embed?def=7&paint=180&float=0.05&seed=1&map=de_mirage" allow="fullscreen"></iframe>
+  <aside>
+    <label>Inspect link <input id="inspect" placeholder="steam://rungame/730/…csgo_econ_action_preview …"></label>
+    <button id="loadInspect">Load inspect link</button>
+    <label>def / paint <input id="defpaint" value="7/180"></label>
+    <button id="loadDef">Load def / paint</button>
+    <label>Pin (item id) <input id="pin" value="6132"></label>
+    <button id="loadPin">Load pin</button>
+    <label>Patch (kit id) <input id="patch" value="4553"></label>
+    <button id="loadPatch">Load patch</button>
+    <label>Pet (1 egg, 2 chick, 3 catalana, 4 silkie, 5 polish) <input id="pet" value="3"></label>
+    <label>Pet colour (index) <input id="petColor" type="number" min="0" value="0"></label>
+    <label>Pet animation <input id="petAnim" value="chick_trick05"></label>
+    <button id="loadPet">Load pet</button>
+    <button id="setPet">Change the pet’s colour and animation</button>
+    <label>Agent <input id="agent" value="customplayer_tm_professional_varf"></label>
+    <label>Agent patches (id~size, one per slot) <input id="agentPatches" value="4588~1.15,4572,4584~0.99"></label>
+    <button id="loadAgent">Load agent with patches</button>
+    <button id="setPatches">Change the agent’s patches</button>
+    <label>Float <input id="float" type="range" min="0" max="1" step="0.001" value="0.05"></label>
+    <label>Seed <input id="seed" type="number" min="1" max="1000" value="1"></label>
+    <label>View <select id="view"><option>orbit</option><option>fpv</option></select></label>
+    <label>Map <select id="map"><option>studio</option><option selected>de_mirage</option><option>de_dust2</option><option>de_inferno</option><option>de_anubis</option><option>cs_italy</option></select></label>
+    <label>Loadout gloves (item|kit) <input id="gloves" value="sporty_gloves|sporty_green"></label>
+    <button id="inspectBtn">Inspect (first person)</button>
+    <button id="inspectGloves">Look at gloves</button>
+    <button id="shot">Screenshot</button>
+    <button id="share">Share</button>
+    <button id="state">Get state</button>
+    <pre id="log"></pre>
+  </aside>
+  <script>
+    const frame = document.getElementById('viewer')
+    const log = (x) => { const el = document.getElementById('log'); el.textContent = JSON.stringify(x) + '\n' + el.textContent }
+    const send = (message) => frame.contentWindow.postMessage(message, '*')
+    const set = (options) => send({ type: 'cs3d:set', options })
+    const $ = (id) => document.getElementById(id)
+
+    window.addEventListener('message', (e) => {
+      if (e.source !== frame.contentWindow || !String(e.data?.type).startsWith('cs3d:')) return
+      if (e.data.type === 'cs3d:screenshot') { window.open().document.write(`<img src="${e.data.dataUrl}">`); return }
+      log(e.data)
+    })
+
+    $('loadInspect').onclick = () => send({ type: 'cs3d:load', target: { inspect: $('inspect').value } })
+    $('loadDef').onclick = () => {
+      const [def, paint] = $('defpaint').value.split('/').map(Number)
+      send({ type: 'cs3d:load', target: { def, paint }, options: { float: +$('float').value, seed: +$('seed').value } })
+    }
+    $('loadPin').onclick = () => send({ type: 'cs3d:load', target: { pin: $('pin').value } })
+    $('loadPatch').onclick = () => send({ type: 'cs3d:load', target: { patch: $('patch').value } })
+    
+    $('loadPet').onclick = () => send({ type: 'cs3d:load', target: { pet: $('pet').value }, options: { pet_color: +$('petColor').value, pet_animation: $('petAnim').value } })
+    $('setPet').onclick = () => set({ pet_color: +$('petColor').value, pet_animation: $('petAnim').value })
+    $('loadAgent').onclick = () => send({ type: 'cs3d:load', target: { character: $('agent').value }, options: { agent_patches: $('agentPatches').value } })
+    $('setPatches').onclick = () => set({ agent_patches: $('agentPatches').value })
+    $('float').oninput = () => set({ float: +$('float').value })
+    $('seed').onchange = () => set({ seed: +$('seed').value })
+    $('view').onchange = () => set({ view: $('view').value, loadout_gloves: $('gloves').value })
+    $('map').onchange = () => send({ type: 'cs3d:setMap', map: $('map').value })
+    $('gloves').onchange = () => set({ loadout_gloves: $('gloves').value })
+    $('inspectBtn').onclick = () => send({ type: 'cs3d:inspect' })
+    $('inspectGloves').onclick = () => send({ type: 'cs3d:inspectGloves' })
+    $('shot').onclick = () => send({ type: 'cs3d:screenshot' })
+    $('share').onclick = () => send({ type: 'cs3d:openShare' })
+    $('state').onclick = () => send({ type: 'cs3d:getState', id: 'q1' })
+  </script>
+</body>
+</html>
