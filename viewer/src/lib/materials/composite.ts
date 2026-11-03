@@ -152,6 +152,9 @@ export function uniformValue(v: ShaderVar | undefined, name: string, type: strin
     case 'vec2': return new THREE.Vector2(a[0] ?? 0, a[1] ?? 0)
     case 'vec3': return new THREE.Vector3(a[0] ?? 0, a[1] ?? 0, a[2] ?? 0)
     case 'vec4': return new THREE.Vector4(a[0] ?? 0, a[1] ?? 0, a[2] ?? 0, a[3] ?? 0)
+    case 'ivec2': case 'bvec2': return new THREE.Vector2(Math.round(a[0] ?? 0), Math.round(a[1] ?? 0))
+    case 'ivec3': case 'bvec3': return new THREE.Vector3(Math.round(a[0] ?? 0), Math.round(a[1] ?? 0), Math.round(a[2] ?? 0))
+    case 'ivec4': case 'bvec4': return new THREE.Vector4(Math.round(a[0] ?? 0), Math.round(a[1] ?? 0), Math.round(a[2] ?? 0), Math.round(a[3] ?? 0))
     case 'mat4': return new THREE.Matrix4().fromArray(a.length === 16 ? a : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
     default: return a[0] ?? 0
   }

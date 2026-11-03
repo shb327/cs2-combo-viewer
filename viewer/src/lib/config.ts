@@ -1,7 +1,7 @@
 export const ASSET_BASE: string = import.meta.env.VITE_ASSET_BASE ?? '/assets/'
 
 
-export const DEFAULT_SKIN = { item: 'weapon_ak47', kit: 'cu_fireserpent_ak47_bravo' } as const
+export const DEFAULT_SKIN = { item: 'weapon_knife_karambit', kit: 'am_ruby_marbleized' } as const
 
 
 export const STICKER_MAX = 5

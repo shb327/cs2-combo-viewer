@@ -3,14 +3,8 @@ import { Camera, Eye, Map as MapIcon, Sticker } from 'lucide-react'
 
 /** The skins the home page features (catalog keys: item|kit). */
 export const FEATURED_SKINS = [
-  'weapon_ak47|cu_fireserpent_ak47_bravo',
-  'weapon_awp|cu_medieval_dragon_awp',
-  'weapon_m4a1|cu_m4a1_howling',
-  'weapon_knife_karambit|aa_fade',
-  'weapon_knife_butterfly|am_sapphire_marbleized_b',
-  'sporty_gloves|sporty_blue_pink',
-  'weapon_awp|awp_printstream',
-  'weapon_ak47|cu_ak_neon_rider',
+  'weapon_knife_karambit|am_ruby_marbleized',
+  'specialist_gloves|specialist_kimono_diamonds_red',
 ]
 
 

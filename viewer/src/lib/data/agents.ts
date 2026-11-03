@@ -26,8 +26,11 @@ export interface AgentIndex {
   agent: Map<string, AgentEntry>
 }
 
-/** The agent whose arms first person shows when none is chosen: the default CT agent. */
-export const DEFAULT_AGENT = 'customplayer_ct_map_based'
+/**
+ * The agent whose arms first person shows when none is chosen: the default Terrorist (Phoenix). Combo views and their
+ * screenshots use it, since the default Counter-Terrorist sleeves cover the gloves.
+ */
+export const DEFAULT_AGENT = 'customplayer_t_map_based'
 
 const loaded = new Map<string, Promise<AgentIndex>>()
 
