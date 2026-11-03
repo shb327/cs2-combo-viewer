@@ -13,9 +13,6 @@ export const FEATURED_SKINS = [
   'weapon_ak47|cu_ak_neon_rider',
 ]
 
-/** The clip in the home page's hero (AK-47 | Fire Serpent turning on Mirage), recorded from the embed so the home page draws no 3D. */
-const HERO_BASE = 'https://assets.chainskins.net/3d/hero'
-export const HERO_VIDEO = { webm: HERO_BASE + '.webm', mp4: HERO_BASE + '.mp4', poster: HERO_BASE + '.jpg' }
 
 export interface HomeFeature {
   icon: LucideIcon

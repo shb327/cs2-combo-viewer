@@ -71,7 +71,7 @@ export const OPTION_PARAMS: DocRow[] = [
   { name: 'auto_rotate', values: '1', description: 'The item turns on its own.', fallback: 'off' },
   { name: 'bg', values: 'transparent', description: 'No backdrop: the page shows through.', fallback: 'the studio backdrop' },
   { name: 'quality', values: 'lite · max', description: 'lite, for small or busy embeds: draws at 1× resolution without antialiasing, and stops drawing while scrolled out of view. max, for renders: always the full resolution, never lowered while frames are slow.', fallback: 'full, lowered while frames are slow' },
-  { name: 'ui', values: '0', description: 'No spinner or error message (the page shows its own). The watermark always stays.', fallback: 'shown' },
+  { name: 'ui', values: '0', description: 'No spinner or error message (the page shows its own).', fallback: 'shown' },
 ]
 
 export const COMMANDS: DocRow[] = [
@@ -81,8 +81,8 @@ export const COMMANDS: DocRow[] = [
   { name: "{ type: 'cs3d:inspect' }", description: 'Plays the weapon’s inspect animation (first person).' },
   { name: "{ type: 'cs3d:inspectGloves' }", description: 'Looks at the gloves: in first person with skin gloves, or on a gloves skin.' },
   { name: "{ type: 'cs3d:resetView' }", description: 'Puts the camera back (and side to front).' },
-  { name: "{ type: 'cs3d:screenshot', id? }", description: 'Replies cs3d:screenshot with a PNG data URL (watermarked).' },
-  { name: "{ type: 'cs3d:screenshots', id?, longSide? }", description: 'Replies cs3d:screenshots with the item alone from the front and from the back, as two transparent PNG Blobs (longSide pixels at most, 2400 by default; no watermark).' },
+  { name: "{ type: 'cs3d:screenshot', id? }", description: 'Replies cs3d:screenshot with a PNG data URL.' },
+  { name: "{ type: 'cs3d:screenshots', id?, longSide? }", description: 'Replies cs3d:screenshots with the item alone from the front and from the back, as two transparent PNG Blobs (longSide pixels at most, 2400 by default).' },
   { name: "{ type: 'cs3d:share', id? }", description: 'Replies cs3d:share with the share link: the short /share/<code>, or the full link when the view doesn’t fit a code.' },
   { name: "{ type: 'cs3d:openShare' }", description: 'Opens the share dialog inside the embed (the link to copy, or an image card to download).' },
   { name: "{ type: 'cs3d:getState', id? }", description: 'Replies cs3d:state with the current settings.' },

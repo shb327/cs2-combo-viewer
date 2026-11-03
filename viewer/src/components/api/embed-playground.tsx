@@ -55,7 +55,7 @@ function embedQuery(s: Settings): string {
 export function EmbedPlayground() {
   const frame = useRef<HTMLIFrameElement>(null)
   const [s, setS] = useState<Settings>(DEFAULTS)
-  const [src, setSrc] = useState(() => 'https://3d.chainskins.net/embed?' + embedQuery(DEFAULTS))
+  const [src, setSrc] = useState(() => window.location.origin + '/embed?' + embedQuery(DEFAULTS))
   const [log, setLog] = useState<LogEntry[]>([])
   const [shot, setShot] = useState<string | null>(null)
   const nextId = useRef(0)
@@ -151,7 +151,7 @@ export function EmbedPlayground() {
           {shot && (
             <div className="tile flex items-center gap-3 p-3">
               <img src={shot} alt="Last screenshot" className="h-20 rounded-lg ring-1 ring-white/10" />
-              <span className="text-[12px] text-muted-foreground">The last <code className="text-violet-200">cs3d:screenshot</code> reply: a PNG data URL, watermarked.</span>
+              <span className="text-[12px] text-muted-foreground">The last <code className="text-violet-200">cs3d:screenshot</code> reply: a PNG data URL.</span>
             </div>
           )}
         </div>

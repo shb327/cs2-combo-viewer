@@ -4,7 +4,6 @@ import type { ViewOptions } from '@/hooks/use-viewer-sync'
 import { asCommand, buildEmbedState, emit, EMBED_VERSION, replier, type EmbedItemInfo, type EmbedOptions, type EmbedTarget } from '@/lib/embed'
 import type { SkinViewer } from '@/lib/viewer/skin-viewer'
 import type { Lighting, Viewmodel } from '@/lib/viewer/viewer-options'
-import { watermarkScreenshot } from '@/lib/watermark'
 
 interface Context {
   viewer: SkinViewer | null
@@ -57,7 +56,7 @@ export function useEmbedCommands(context: Context): void {
           break
         case 'cs3d:screenshot': {
           const dataUrl = viewer?.screenshot()
-          if (dataUrl) void watermarkScreenshot(dataUrl).then((marked) => reply({ type: 'cs3d:screenshot', id: command.id, dataUrl: marked }))
+          if (dataUrl) reply({ type: 'cs3d:screenshot', id: command.id, dataUrl })
           break
         }
         case 'cs3d:screenshots': {

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Code2, History, Search } from 'lucide-react'
+import { Code2, History, Search } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { BrandMark } from '@/components/common/brand-mark'
 import { Kbd } from '@/components/common/kbd'
@@ -52,9 +52,7 @@ export function HomeSidebar({ history, catalog, attachments, agents, onSearch, o
       </div>
 
       <div className="flex flex-col gap-1.5 border-t border-white/10 p-3">
-        <Button variant="ghost" className="justify-start" render={<Link to="/api" />}><Code2 /> Embed API <span className="ml-auto text-[11px] text-muted-foreground">for developers</span></Button>
-        <Button variant="ghost" className="justify-start" render={<a href="https://chainskins.net" target="_blank" rel="noopener" />}><ArrowUpRight /> chainskins.net</Button>
-      </div>
+        <Button variant="ghost" className="justify-start" render={<Link to="/api" />}><Code2 /> Embed API <span className="ml-auto text-[11px] text-muted-foreground">for developers</span></Button>      </div>
     </aside>
   )
 }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { EmbedBadge } from '@/components/embed/embed-badge'
 import { EmbedStatus } from '@/components/embed/embed-status'
 import { FrozenFrame } from '@/components/embed/frozen-frame'
 import { ShareDialog } from '@/components/stage/share-button'
@@ -25,8 +24,6 @@ import { headingFor } from '@/lib/heading'
 import type { ShareSource } from '@/lib/share-card'
 import { DEFAULT_LIGHTING, DEFAULT_VIEWMODEL, type Lighting, type Viewmodel } from '@/lib/viewer/viewer-options'
 import { clampFloat } from '@/lib/wear'
-
-const HOME = 'https://chainskins.net'
 
 export function EmbedPage() {
   const [initialParams] = useSearchParams()
@@ -81,7 +78,6 @@ export function EmbedPage() {
       {!initial.transparent && !lighting.map && <StudioBackdrop />}
       <div ref={viewportRef} className="absolute inset-0" />
       {frozen && <FrozenFrame canvas={frozen} thawing={thawing} />}
-      <EmbedBadge href={(selection && shareUrl()) || HOME} />
       {initial.ui && <EmbedStatus loading={loading && !!target} error={error} />}
       <ShareDialog share={shareOpen} onClose={() => setShareOpen(null)} />
     </main>

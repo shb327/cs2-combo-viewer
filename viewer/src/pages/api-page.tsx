@@ -96,7 +96,6 @@ export function ApiPage() {
           <ApiSection id="notes" title="Good to know">
             <ul className="grid gap-3 md:grid-cols-2">
               {[
-                ['Watermark', <>The embed carries a small chainskins.net watermark in its corner, linking to the full viewer and burnt into its screenshots. It is always there: <code className="text-violet-200">ui=0</code> doesn’t hide it.</>],
                 ['Framing', <>Only <code className="text-violet-200">/embed</code> may be framed (it sends <code className="text-violet-200">frame-ancestors *</code>); the rest of the site can’t be put in an iframe.</>],
                 ['Transparent', <><code className="text-violet-200">bg=transparent</code> drops the studio backdrop: your page shows through behind the item.</>],
                 ['Example page', <>A plain HTML page driving an embed: <a className="text-violet-300 underline-offset-2 hover:underline" href="/embed-example.html">/embed-example.html</a>.</>],

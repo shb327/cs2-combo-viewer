@@ -16,7 +16,6 @@ import { useLocalStorage } from '@/hooks/use-local-storage'
 import { useKeyShortcut } from '@/hooks/use-key-shortcut'
 import { useOpenPickerShortcut } from '@/hooks/use-open-picker-shortcut'
 import { IS_MOBILE_DEVICE } from '@/lib/device'
-import { watermarkScreenshot } from '@/lib/watermark'
 import { useMapLighting } from '@/hooks/use-map-lighting'
 import { useRenderQuality } from '@/hooks/use-render-quality'
 import { usePicker } from '@/hooks/use-picker'
@@ -92,9 +91,8 @@ export function ViewerPage({ selection }: ViewerPageProps) {
   const screenshot = async () => {
     const raw = viewer?.screenshot()
     if (!raw) return
-    const url = await watermarkScreenshot(raw, item?.id.replace('|', ' | '))
     const link = document.createElement('a')
-    link.href = url
+    link.href = raw
     link.download = item ? `${item.id.replace('|', '-')}-${state.seed}.png` : `${selection.kind}.png`
     link.click()
   }
