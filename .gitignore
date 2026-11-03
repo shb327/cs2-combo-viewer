@@ -23,3 +23,7 @@ dist/
 .env.*
 !.env.example
 .DS_Store
+
+# .NET build output
+bin/
+obj/
