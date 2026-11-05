@@ -60,8 +60,17 @@ const paintKit = (name) => {
   if (!kit) throw new Error('paint kit not in items_game: ' + name)
   return { index: Number(index), ...kit, rarity: IG.paint_kits_rarity?.[name] ?? null }
 }
-/** The kit's name (the viewer adds a Doppler or Gamma Doppler phase itself, from the kit name). */
-const kitDisplayName = (kit) => tr(kit.description_tag)
+/**
+ * The finish's English name. Doppler and Gamma Doppler kits share one name in the game's text; their phase (the
+ * market's "Doppler (Ruby)", "Gamma Doppler (Phase 2)") is in the kit's own name only.
+ */
+const PHASES = { ruby: 'Ruby', sapphire: 'Sapphire', blackpearl: 'Black Pearl', emerald: 'Emerald' }
+const kitDisplayName = (kit) => {
+  const name = tr(kit.description_tag)
+  const phase = /_phase(\d)/.exec(kit.name)?.[1]
+  const gem = /^am_(ruby|sapphire|blackpearl|emerald)_marbleized/.exec(kit.name)?.[1]
+  return phase ? `${name} (Phase ${phase})` : gem ? `${name} (${PHASES[gem]})` : name
+}
 
 // ── Round 1: models, kit composite materials, clips ────────────────────────────────────────────────────────────────
 const knives = Object.entries(config.knives).map(([name, kits]) => ({ def: itemDef(name), kits: kits.map(paintKit) }))
@@ -127,8 +136,13 @@ const loadMaterials = (paths, round) => {
 for (const kit of allKits) {
   kit.procedures = allProcedures(kit.compmat)
   kit.containers = containers(kit.procedures)
-  kit.paint = strip(kit.containers.paint?.m_strSpecificContainerMaterial ?? '')
+  // Classic kits name their paint as a specific material; the newer gloves as a loose resource-material variable.
+  const paintVar = (kit.containers.paint?.m_vecLooseVariables ?? []).find((v) => v.m_nVariableType === 'LOOSE_VARIABLE_TYPE_RESOURCE_MATERIAL')
+  kit.paint = strip(kit.containers.paint?.m_strSpecificContainerMaterial ?? paintVar?.m_strResourceMaterial ?? '')
   if (!kit.paint) throw new Error(`${kit.name}: no paint material in its vcompmat`)
+  // The newer gloves' passes start from the compositor template (workshop/paintkits/templates/glove_compositor.vmat).
+  const compositor = kit.containers.paint_compositor?.m_strSpecificContainerMaterial
+  kit.compositor = compositor ? strip(compositor) : null
 }
 /**
  * The materials to extract: every mesh of the knives and gloves; of the agents only the first-person groups (their arms),
@@ -137,7 +151,7 @@ for (const kit of allKits) {
 const agentModels = new Set(agents.map((a) => a.model_player))
 const usedMeshes = (m) => modelInfo(m).meshes.filter((me) => config.agentBodies || !agentModels.has(m) || /^firstperson/.test(me.name))
 const modelMaterials = models.flatMap((m) => usedMeshes(m).flatMap((me) => me.drawCalls.map((c) => c.material)))
-loadMaterials([...allKits.map((k) => k.paint), ...modelMaterials], 'jobs-3')
+loadMaterials([...allKits.flatMap((k) => [k.paint, k.compositor].filter(Boolean)), ...modelMaterials], 'jobs-3')
 
 // ── Round 3: the knives' composite inputs ──────────────────────────────────────────────────────────────────────────
 const compositeInputs = (mat) => (mat?.attributes?.composite_inputs ? strip(mat.attributes.composite_inputs) : null)
@@ -145,6 +159,8 @@ loadMaterials(modelMaterials.map((m) => compositeInputs(materials.get(strip(m)))
 
 // ── Round 4: textures ──────────────────────────────────────────────────────────────────────────────────────────────
 const textureFiles = new Map()
+/** Each texture's average colour (its vtex Reflectivity), by file under GAME_ROOT: the newer gloves' TextureAverageColor. */
+const textureAverages = {}
 {
   const wanted = new Set()
   for (const m of materials.values()) for (const t of Object.values(m.textures)) wanted.add(strip(t))
@@ -152,6 +168,7 @@ const textureFiles = new Map()
   for (const [p, e] of r) {
     if (e.error) { console.warn(`  texture ${p}: ${e.error}`); continue }
     textureFiles.set(p, path.relative(GAME_ROOT, e.out).replace(/\\/g, '/'))
+    if (e.reflectivity) textureAverages[textureFiles.get(p)] = e.reflectivity.map((x) => Math.round(x * 1e5) / 1e5)
   }
   const missing = [...wanted].filter((t) => !textureFiles.has(t))
   if (missing.length) console.log(`  ${missing.length} textures not in pak01 (left out; the viewer uses neutral defaults): ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', …' : ''}`)
@@ -213,7 +230,12 @@ function kitRolls(kit) {
       rolls.push(b ? { var: name, min: b.min.slice(0, n), max: b.max.slice(0, n) } : { var: name, fixed: true })
       vars.push(`${name}.${comps}`)
     }
-    groups.push({ seed: (m.m_strRandomRollInputVars_SeedInputVar ?? '').split('.').pop() || 'g_nRandomSeed', vars, when: [] })
+    // Its conditions (VALUE_EQUALS on the kit's flags or the hand's seed_offset), negated when m_bPassWhenTrue is false.
+    const when = (m.m_vecConditions ?? []).filter((c) => c.m_nMutatorCondition.endsWith('VALUE_EQUALS')).map((c) => ({
+      container: c.m_strMutatorConditionContainerName, var: c.m_strMutatorConditionContainerVarName,
+      value: c.m_strMutatorConditionContainerVarValue, not: c.m_bPassWhenTrue === false,
+    }))
+    groups.push({ seed: (m.m_strRandomRollInputVars_SeedInputVar ?? '').split('.').pop() || 'g_nRandomSeed', vars, when })
   })
   return { rolls, groups }
 }
@@ -240,19 +262,24 @@ function kitPasses(kit, paintMat) {
     if (alias === 'paint') return { literal: paint }
     if (alias === 'target' || alias === 'composite_inputs') return { ref: alias }
     const c = kit.containers[alias]
+    const specific = c?.m_strSpecificContainerMaterial && materials.get(strip(c.m_strSpecificContainerMaterial))
+    if (specific) return { literal: { params: materialParams(specific), textures: materialTextures(specific) } }
     if (c?.m_vecLooseVariables) return { literal: { params: looseParams(c), textures: {} } }
     return null
   }
   const conditionsHold = (m) => (m.m_vecConditions ?? []).every((c) => {
     const alias = c.m_strMutatorConditionContainerName
     // Conditions on the item's own containers are left to the runtime layers they guard (always copied there).
+    // Those on the hand (handedness, material_seed) are left to the viewer, which sets what they guard per hand.
     if (alias === 'composite_inputs' || alias === 'target') return false
     const src = source(alias)
     if (!src?.literal) return false
     const has = c.m_strMutatorConditionContainerVarName in src.literal.params || c.m_strMutatorConditionContainerVarName in src.literal.textures
-    if (c.m_nMutatorCondition.endsWith('VALUE_EXISTS')) return has
-    if (c.m_nMutatorCondition.endsWith('VALUE_EQUALS')) return String(src.literal.params[c.m_strMutatorConditionContainerVarName]) === c.m_strMutatorConditionContainerVarValue
-    return false
+    let holds
+    if (c.m_nMutatorCondition.endsWith('VALUE_EXISTS')) holds = has
+    else if (c.m_nMutatorCondition.endsWith('VALUE_EQUALS')) holds = String(src.literal.params[c.m_strMutatorConditionContainerVarName]) === c.m_strMutatorConditionContainerVarValue
+    else return false
+    return c.m_bPassWhenTrue === false ? !holds : holds
   })
   const layersFor = (instructions, initial) => {
     const layers = []
@@ -376,13 +403,15 @@ for (const { def, kits } of knives) {
     }
     written.push(writeJson(`kits/${kit.name}.json`, data))
     index.skins.push({
-      item: def.name, kit: kit.name, name: `${displayName} | ${data.displayName}`, paintIndex: kit.index, style: data.style,
+      item: def.name, kit: kit.name, name: data.displayName, paintIndex: kit.index, style: data.style,
       shader: data.shader, rarity: kit.rarity, floatMin: data.floatMin, floatMax: data.floatMax, render: '',
     })
   }
 }
 
 const armsModels = {}
+/** The textures the newer gloves' compositor reads averages of. */
+const averaged = new Set()
 for (const { def, kits } of gloves) {
   const info = modelInfo(def.model_player)
   const meshes = meshDrawCalls(info)
@@ -394,24 +423,34 @@ for (const { def, kits } of gloves) {
   armsModels[def.model_player] = skeleton(info)
   for (const kit of kits) {
     const paintMat = materials.get(kit.paint)
-    const { rolls } = kitRolls(kit)
-    const classic = !paintMat.ints.F_BACKWARDS_COMPATIBILITY
-    if (!classic) console.warn(`  ${kit.name}: a newer (v2) glove paint; only classic gloves are built so far`)
-    const data = {
+    const { rolls, groups } = kitRolls(kit)
+    const common = {
       name: kit.name, displayName: kitDisplayName(kit), index: kit.index, rarity: kit.rarity,
       // Glove kits carry no wear range of their own: the game's default for gloves.
       floatMin: Number(kit.wear_remap_min ?? 0.06), floatMax: Number(kit.wear_remap_max ?? 0.8),
-      legacyModel: false, shader: paintMat.shader, style: null,
-      params: materialParams(paintMat), textures: materialTextures(paintMat, true), rolls,
+      legacyModel: false, shader: 'csgo_customglove.vfx', style: null,
+    }
+    let data
+    if (kit.compositor) {
+      // A newer (v2) glove: the vcompmat's passes over the compositor template and the paint (a csgo_customglove_preview
+      // material), the seed's roll groups with their conditions, and the flags those conditions read (bSync…).
+      const { passes, materialLayers } = kitPasses(kit, paintMat)
+      const params = {}
+      for (const c of Object.values(kit.containers)) Object.assign(params, looseParams(c))
+      data = { ...common, params, textures: {}, rolls, rollGroups: groups, passes: { g_tColor: passes.g_tColor }, materialLayers, compositor: kit.compositor }
+      for (const layer of passes.g_tColor) for (const t of Object.values(layer.textures ?? {})) averaged.add(t)
+    } else {
+      data = { ...common, shader: paintMat.shader, params: materialParams(paintMat), textures: materialTextures(paintMat, true), rolls }
     }
     written.push(writeJson(`kits/${kit.name}.json`, data))
     index.skins.push({
-      item: def.name, kit: kit.name, name: `${displayName} | ${data.displayName}`, paintIndex: kit.index, style: null,
+      item: def.name, kit: kit.name, name: data.displayName, paintIndex: kit.index, style: null,
       shader: data.shader, rarity: kit.rarity, floatMin: data.floatMin, floatMax: data.floatMax, render: '',
     })
   }
 }
 written.push(writeJson('index.json', index))
+written.push(writeJson('texture_average.json', Object.fromEntries([...averaged].sort().filter((t) => textureAverages[t]).map((t) => [t, textureAverages[t]]))))
 
 // Agents: their models' first-person groups and skeleton. First person loads glb, a copy of the model with only its
 // first-person meshes (<model>.fp.glb); the third-person agent view loads body, the whole model.
