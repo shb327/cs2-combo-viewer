@@ -33,6 +33,18 @@ export function useEmbedOptions(state: ViewerStateApi, { setLighting, setViewmod
     }
     if (o.viewmodel_sway !== undefined) setViewmodel((v) => ({ ...v, sway: o.viewmodel_sway! }))
     if (o.viewmodel_left_hand !== undefined) setViewmodel((v) => ({ ...v, leftHanded: o.viewmodel_left_hand! }))
+    /** The game's ranges for viewmodel_fov and viewmodel_offset_x / _y / _z. */
+    const { viewmodel_fov: fov, viewmodel_offset_x: x, viewmodel_offset_y: y, viewmodel_offset_z: z } = o
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+    if (fov !== undefined || x !== undefined || y !== undefined || z !== undefined) {
+      setViewmodel((v) => ({
+        ...v,
+        ...(fov !== undefined && { fov: clamp(fov, 54, 68) }),
+        ...(x !== undefined && { offsetX: clamp(x, -2.5, 2.5) }),
+        ...(y !== undefined && { offsetY: clamp(y, -2, 2) }),
+        ...(z !== undefined && { offsetZ: clamp(z, -2, 2) }),
+      }))
+    }
     if (o.auto_rotate !== undefined) setView((v) => ({ ...v, spin: o.auto_rotate! }))
     if (o.knife_pose !== undefined) setView((v) => ({ ...v, knifePose: o.knife_pose!, back: o.side === undefined ? false : v.back }))
     if (o.side !== undefined) setView((v) => ({ ...v, back: o.side === 'back' }))

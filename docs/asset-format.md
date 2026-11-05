@@ -108,18 +108,18 @@ Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by 
   models: { [model]: { glb, body, skeleton: ArmsSkeleton, drawCalls: { [mesh]: DrawCall[] } } } }
 ```
 
-First person uses the mesh groups `firstperson_sleeves` (always) and `firstperson_default_gloves_arms` (when no skin gloves; its `bare_arm` material gives the skin colour under skin gloves). The default agent is `customplayer_t_map_based`.
+First person uses the mesh groups `firstperson_sleeves` (always) and `firstperson_default_gloves_arms` (when no skin gloves; its `bare_arm` material gives the skin colour under skin gloves). A model without `firstperson_sleeves` (Ricksaw: bare forearms) draws no sleeves. The default agent is `customplayer_ctm_st6_varianti` (Lt. Commander Ricksaw | NSWC SEAL).
 
 ## `firstperson/`
 
 | File | Required | Content |
 | --- | --- | --- |
 | `index.json` | yes | `{ [item]: poseFile }` |
-| `<poseFile>` | yes | `{ clip, viewmodel: BonePose }` with `BonePose = { bones, parents, pose: [t[3], q[4] xyzw, scale][] }`: the knife's idle, first frame, on the viewmodel skeleton (must have `wpn`, `wpnHand_L/R`) |
+| `<poseFile>` | yes | `{ clip, viewmodel: BonePose, weapon?: BonePose & { skeleton } }` with `BonePose = { bones, parents, pose: [t[3], q[4] xyzw, scale][] }`: the knife's idle, first frame, on the viewmodel skeleton (must have `wpn`, `wpnHand_L/R`); `weapon`: the knife's own track (its `.vnmskel`), rooted at `wpn` |
 | `arms.json`, `arms_models.json` | yes / optional | `ArmsSkeleton` of the glove models (`{ [vmdl]: … }` for models with their own bone order) |
 | `idle_index.json` + `idle/*` | optional | keyed by pose file; `InspectClip` looped |
-| `inspect_index.json` + `inspect/*` | optional | `{ [item]: file }`; `InspectClip = { clip, duration, frames, viewmodel: { bones, parents, tracks: [translations, rotations][] } }` (one value, or one per frame) |
-| `weapon_binds.json`, `weapon_skeletons.json`, `attack_index.json` | optional | the knife's bind, own skeleton, attack clips |
+| `inspect_index.json` + `inspect/*` | optional | `{ [item]: file }`; `InspectClip = { clip, duration, frames, viewmodel: { bones, parents, tracks: [translations, rotations][] }, weapon? }` (one value, or one per frame; `weapon` as `viewmodel` plus `skeleton`, the knife's track) |
+| `weapon_binds.json`, `weapon_skeletons.json`, `attack_index.json` | optional | `{ [item]: [t, q] }`: the model-space bind of the bone the knife hangs from (`weapon_offset`); `{ [glb path]: ArmsSkeleton }`: the knife model's skeleton, to pose it on its track; attack clips (not built yet) |
 
 `ArmsSkeleton = { bones, parents /* -1 root, parents first */, pos: number[3][], rot: number[4][] /* parent space, Source inches */, twists? }`.
 
