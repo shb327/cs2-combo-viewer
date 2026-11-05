@@ -3,14 +3,30 @@
 //
 //   node build-maps.mjs [--items items.json]
 //
-// Writes maps.json, scenes.json, maps/<id>.exr and backgrounds/<id>.jpg under the viewer's data. The background is the
-// user's own screenshot, read from C:\cs2-data\reference; like everything under extracted\, it never goes into git.
+// Writes maps.json, scenes.json, maps/<id>.exr (half-float RGB) and backgrounds/<id>.jpg plus <id>-<width>.webp (the
+// sizes the viewer picks from) under the viewer's data. The background is the user's own screenshot, read from
+// C:\cs2-data\reference; like everything under extracted\, it never goes into git.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readExr, writeExr } from './lib/exr.mjs'
 import { extract } from './lib/extract.mjs'
 import { EXTRACTED, REFERENCE, SOURCE, VIEWER_DATA, insideRoot, parseArgs } from './lib/paths.mjs'
+import { cwebp } from './lib/webp.mjs'
+
+/** The background's widths: the viewer picks the smallest that covers its canvas on the visitor's screen. */
+const BACKGROUND_WIDTHS = [960, 1280, 1920, 2560, 3840]
+
+/** A baseline or progressive JPEG's size, from its first frame header. */
+function jpegSize(buf) {
+  for (let p = 2; p < buf.length;) {
+    const marker = buf[p + 1], len = buf.readUInt16BE(p + 2)
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return { w: buf.readUInt16BE(p + 7), h: buf.readUInt16BE(p + 5) }
+    p += 2 + len
+  }
+  throw new Error('no JPEG frame header')
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const args = parseArgs(process.argv.slice(2))
@@ -74,11 +90,17 @@ for (const [id, map] of Object.entries(config.maps ?? {})) {
     panorama = [...extract([{ kind: 'texture', path: skyTex, out: out(`maps/${id}.exr`) }], path.join(dir, 'jobs')).values()][0]
   }
   if (panorama.error || !panorama.out.endsWith('.exr')) throw new Error(`${id}: panorama ${panorama.path}: ${panorama.error ?? 'not a float texture'}`)
+  // Rewritten as half-float RGB (the extractor writes 32-bit RGBA, its alpha 1): a quarter of the size, 0.05% error.
+  writeFileSync(insideRoot(EXTRACTED, panorama.out), writeExr(readExr(readFileSync(panorama.out))))
 
-  // The background: the user's screenshot of the map, taken in game without hands, weapon or HUD.
+  // The background: the user's screenshot of the map, taken in game without hands, weapon or HUD; the JPEG as is (a
+  // fallback) and WebPs in the widths up to its own.
   const background = insideRoot(REFERENCE, map.background)
   if (!existsSync(background)) throw new Error(`${id}: no background at ${background}`)
   copyFileSync(background, out(`backgrounds/${id}.jpg`))
+  const shot = jpegSize(readFileSync(background))
+  const widths = BACKGROUND_WIDTHS.filter((w) => w <= shot.w)
+  await Promise.all(widths.map((w) => cwebp(background, out(`backgrounds/${id}-${w}.webp`), 'photo', w === shot.w ? [] : ['-resize', String(w), '0'])))
 
   // The sun: light_environment's direction (where its light travels), colour (sRGB, 0–1) and brightness.
   const sun = {
@@ -104,9 +126,10 @@ for (const [id, map] of Object.entries(config.maps ?? {})) {
   // The post volume's exposure range: the game settles between them; the middle is used.
   const exposure = post ? (Number(post.minexposure ?? 1) + Number(post.maxexposure ?? 1)) / 2 : 1
 
-  maps.push({ id, name: map.name ?? id, hdr: `maps/${id}.exr`, thumb: `backgrounds/${id}.jpg` })
+  maps.push({ id, name: map.name ?? id, hdr: `maps/${id}.exr`, thumb: `backgrounds/${id}-${widths[0]}.webp` })
   scenes.push({
     id, name: map.name ?? id, glb: null, lightmap: null, exposure,
+    background: { widths, aspect: Math.round((shot.w / shot.h) * 1e4) / 1e4 },
     camera,
     anchor: { position: round(look.map((v) => v)), yaw: 0 },
     lights: [], sceneLights: [],

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import type { StillBackground } from '@/lib/viewer/fixed-inspect'
 import type { ScenePost } from '@/lib/viewer/post'
 
 /** A light the game aims at the inspected item (build_scenes.py; glTF space). */
@@ -26,6 +27,8 @@ export interface InspectSceneData {
   name: string
   glb: string
   lightmap: string | null
+  /** A still background (a screenshot) in several widths: backgrounds/<id>-<width>.webp. */
+  background?: StillBackground
   /** The scene's exposure: brings its baked light to a common level (outdoor maps are several times brighter). */
   exposure?: number
   /** The game's weapon inspect camera: where it stands, where it looks, its vertical FOV. */

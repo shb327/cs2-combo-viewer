@@ -95,7 +95,7 @@ export class MapStage {
     const [, texture, video, scenes] = await Promise.all([
       this.veil.cover(),
       loadPanorama(dataBase + 'maps/' + id),
-      loadBackground(dataBase + 'backgrounds/' + id),
+      loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size)),
       loadScenes(dataBase),
     ])
     const sceneData = scenes.get(id)
@@ -208,7 +208,11 @@ export class MapStage {
     this.post?.setExposure(exposure)
   }
 
+  /** The canvas' size in CSS pixels: a still background is picked to cover it. */
+  private size = { w: 1280, h: 720 }
+
   setSize(w: number, h: number): void {
+    this.size = { w, h }
     this.post?.setSize(w, h)
   }
 

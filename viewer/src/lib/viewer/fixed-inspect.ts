@@ -87,12 +87,22 @@ export function patchEnvDiffuse(root: THREE.Object3D, uniform: { value: number }
   })
 }
 
-/** A map's pre-rendered background video (muted, looping), or null when there is none. */
+/** A still background in several widths (backgrounds/<id>-<width>.webp), as the map's scene lists it. */
+export interface StillBackground { widths: number[]; aspect: number }
+
 /**
- * A map's background: its pre-rendered video (backgrounds/<id>.mp4), else a still image (backgrounds/<id>.jpg, a
- * screenshot taken in game), drawn behind the canvas, or null when it has neither.
+ * A map's background, drawn behind the canvas: with `still` (the map has a screenshot taken in game), the smallest of
+ * its widths that covers a canvas of `size` CSS pixels on this screen (object-fit: cover); else its pre-rendered video
+ * (backgrounds/<id>.mp4), else backgrounds/<id>.jpg. Null when it has none.
  */
-export async function loadBackground(base: string): Promise<HTMLVideoElement | HTMLImageElement | null> {
+export async function loadBackground(base: string, still?: StillBackground, size?: { w: number; h: number }): Promise<HTMLVideoElement | HTMLImageElement | null> {
+  if (still?.widths.length) {
+    const { w, h } = size ?? { w: 1280, h: 720 }
+    const need = Math.max(w, h * still.aspect) * Math.min(2, window.devicePixelRatio || 1)
+    const widths = [...still.widths].sort((a, b) => a - b)
+    const width = widths.find((x) => x >= need) ?? widths[widths.length - 1]
+    return (await loadBackgroundImage(`${base}-${width}.webp`)) ?? loadBackgroundImage(base + '.jpg')
+  }
   return (await loadBackgroundVideo(base + '.mp4')) ?? loadBackgroundImage(base + '.jpg')
 }
 
