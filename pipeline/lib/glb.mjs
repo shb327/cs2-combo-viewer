@@ -1,9 +1,10 @@
 // A GLB with only some of its mesh nodes: for the agents' first-person model (their first-person groups, without the
 // third-person body). Handles the GLBs the extractor writes: one buffer, mesh nodes under one scene, no sparse accessors.
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { writeIfChanged } from './extract.mjs'
 
-/** Writes `out` with the mesh nodes of `src` whose name `keep` accepts (and only the data they use). */
+/** Writes `out` with the mesh nodes of `src` whose name `keep` accepts (and only the data they use); true if it changed. */
 export function filterGlb(src, out, keep) {
   const glb = readFileSync(src)
   const jsonLength = glb.readUInt32LE(12)
@@ -67,5 +68,5 @@ export function filterGlb(src, out, keep) {
   const header = Buffer.alloc(12)
   header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4); header.writeUInt32LE(12 + 8 + text.length + 8 + body.length, 8)
   const chunk = (type, data) => { const h = Buffer.alloc(8); h.writeUInt32LE(data.length, 0); h.writeUInt32LE(type, 4); return Buffer.concat([h, data]) }
-  writeFileSync(out, Buffer.concat([header, chunk(0x4e4f534a, text), chunk(0x004e4942, body)]))
+  return writeIfChanged(out, Buffer.concat([header, chunk(0x4e4f534a, text), chunk(0x004e4942, body)]))
 }
