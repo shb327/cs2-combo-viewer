@@ -25,6 +25,12 @@ export interface EmbedOptions {
   loadout_agent?: string
   viewmodel_sway?: boolean
   viewmodel_left_hand?: boolean
+  /** viewmodel_fov (54–68, the game's range): the horizontal angle on a 4:3 screen, degrees. */
+  viewmodel_fov?: number
+  /** viewmodel_offset_x / _y / _z: right, forward, up from the eye (inches). */
+  viewmodel_offset_x?: number
+  viewmodel_offset_y?: number
+  viewmodel_offset_z?: number
   knife_pose?: 'vertical' | 'horizontal' | 'tilted'
   side?: 'front' | 'back'
   auto_rotate?: boolean
