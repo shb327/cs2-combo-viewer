@@ -214,12 +214,14 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
     model: GAME_ROOT + item.glb,
   }
 
+  const leftAttrSides = (['left', 'right'] as const).filter((side) =>
+    Object.values(item.meshes).some((calls) => calls.some((c) => c.leftAttr && new RegExp(`_${side}\.vmat$`).test(c.material))))
   if (kit.shader === 'csgo_customglove.vfx' && kit.compositor && kit.passes?.g_tColor) {
     const color = applyLayers(kit.passes.g_tColor, {})
     const mat = applyLayers(kit.materialLayers ?? [], {})
     return {
       ...common, style: 'glove', vmat: { shader: kit.shader, ints: {}, floats: {}, vectors: {}, textures: {} }, textureRoot: GAME_ROOT,
-      drawCalls: item.meshes, v2: { params: color.params, textures: color.textures, material: mat.params, rollPlan: rollPlan(kit) },
+      drawCalls: item.meshes, v2: { params: color.params, textures: color.textures, material: mat.params, rollPlan: rollPlan(kit), leftAttrSides },
     }
   }
   if (kit.shader === 'csgo_customglove.vfx') {
@@ -234,8 +236,7 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
     return {
       ...common, style: 'glove', vmat, textureRoot: GAME_ROOT,
       patternRotation: rot?.min && rot.max && rot.min[0] === rot.max[0] ? rot.min[0] : undefined,
-      leftAttrSides: (['left', 'right'] as const).filter((side) =>
-        Object.values(item.meshes).some((calls) => calls.some((c) => c.leftAttr && new RegExp(`_${side}\.vmat$`).test(c.material)))),
+      leftAttrSides,
       drawCalls: item.meshes,
     }
   }

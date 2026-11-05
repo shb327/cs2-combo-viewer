@@ -53,6 +53,12 @@ export const GLOVE_VS_TYPES: Record<string, string> = {
 }
 
 /**
+ * The vertex stage's uniform for one of its variables. Some share a name with the fragment stage's (combos 0 and 2:
+ * g_vPatternTexCoordXform0/1) but have their own expressions, and three.js would make one uniform of the two.
+ */
+export const vsUniform = (name: string): string => 'vs_' + name
+
+/**
  * The game's vertex shader for the glove compositor (decompiled, both of its combos): the quad in UV space and the UVs
  * it derives. The classic combo only reads location 0 (the UV); the newer one reads all seven.
  */
@@ -67,7 +73,7 @@ export function gloveVertexShader(inputs: Record<string, string>): string {
     6: ['vec4', 'vec4(1.0, 0.0, 0.0, 1.0)'],
   }
   const used = Object.keys(inputs).map(Number)
-  const vsUniforms = used.some((l) => l > 0) ? Object.entries(GLOVE_VS_TYPES).map(([n, t]) => `uniform ${t} ${n};`).join('\n') : ''
+  const vsUniforms = used.some((l) => l > 0) ? Object.entries(GLOVE_VS_TYPES).map(([n, t]) => `uniform ${t} ${vsUniform(n)};\n#define ${n} ${vsUniform(n)}`).join('\n') : ''
   return `precision highp float;
 precision highp int;
 in vec3 position;

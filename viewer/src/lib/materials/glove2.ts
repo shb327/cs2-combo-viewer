@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { valveRandom, type RandomFloat } from '@/lib/data/rng'
 import type { KitRollPlan } from '@/lib/data/catalog'
 import { evalExpr, uniformValue, type CompositeTable, type ExprContext } from '@/lib/materials/composite'
-import { GLOVE_VS_TYPES, GloveTargets, comboSets, fallbackTexture, gloveVertexShader, isSrgb, loadGloveProgram, type GloveProgram } from '@/lib/materials/glove-shared'
+import { GLOVE_VS_TYPES, GloveTargets, comboSets, fallbackTexture, gloveVertexShader, isSrgb, loadGloveProgram, vsUniform, type GloveProgram } from '@/lib/materials/glove-shared'
 import { packLayers } from '@/lib/materials/glove'
 
 type Params = Record<string, number | boolean | number[] | string>
@@ -13,10 +13,16 @@ export interface GloveV2Inputs {
   /** The final material's values (g_flSheenScale…). */
   material: Params
   rollPlan: KitRollPlan
+  /** The hands whose model material carries the "left" attribute (the vcompmat's handedness container). */
+  leftAttrSides?: ('left' | 'right')[]
 }
 
-/** The newer gloves composite with the game's combo for F_BACKWARDS_COMPATIBILITY, F_ANISOTROPIC_GLOSS and F_TINT_ID. */
-const V2_FEATURES = { F_BACKWARDS_COMPATIBILITY: 1, F_ANISOTROPIC_GLOSS: 1, F_TINT_ID: 1 }
+/**
+ * The game's combo for the kit's static features, as its passes leave them (the compositor template sets all three;
+ * a paint without F_TINT_ID turns that one off).
+ */
+const v2Features = (p: Params): Record<string, number> => Object.fromEntries(
+  ['F_BACKWARDS_COMPATIBILITY', 'F_ANISOTROPIC_GLOSS', 'F_TINT_ID'].map((f) => [f, Number(p[f] ?? 0)]))
 
 let averagesPromise: Promise<Record<string, number[]>> | null = null
 
@@ -34,7 +40,7 @@ export class GloveV2Finish {
   static async create(renderer: THREE.WebGLRenderer, base: string, inputs: GloveV2Inputs, side: 'left' | 'right',
     loadTexture: (path: string, srgb: boolean) => Promise<THREE.Texture>): Promise<GloveV2Finish> {
     averagesPromise ??= fetch(base + 'extracted/viewer/texture_average.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
-    const [shader, averages] = await Promise.all([loadGloveProgram(base, V2_FEATURES), averagesPromise])
+    const [shader, averages] = await Promise.all([loadGloveProgram(base, v2Features(inputs.params)), averagesPromise])
     const load = async (name: string) => {
       const path = inputs.textures[name]
       return path ? loadTexture(path, isSrgb(shader, name)) : fallbackTexture(name)
@@ -59,7 +65,7 @@ export class GloveV2Finish {
     const uniforms: Record<string, THREE.IUniform> = { uUvOffset: { value: new THREE.Vector2(0, 0) } }
     for (const [name] of this.uniformList) uniforms[name] = { value: null }
     for (const [name, t] of Object.entries(textures)) uniforms[name] = { value: t }
-    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[name] ??= { value: null }
+    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[vsUniform(name)] = { value: null }
     this.program = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: gloveVertexShader(shader.combo.inputs), fragmentShader: shader.frag, uniforms,
       depthTest: false, depthWrite: false,
@@ -84,16 +90,20 @@ export class GloveV2Finish {
   /**
    * The paint seed's rolls as the kit's vcompmat runs them: each random-roll mutator whose conditions pass for this
    * hand restarts the stream from its seed (g_nRandomSeed = the seed, g_nRandomSeedAlt = seed + 1) and rolls its
-   * variables in order. The right hand is the material with seed_offset 1; per-material sync flags pick which seed
-   * the right hand's placement rolls use. Kits without that list fall back to one stream per hand.
+   * variables in order. The right hand is the material with seed_offset 1 (material_seed); the kit's sync flags
+   * (instance_params) pick which seed the right hand's placement rolls use. A variable the container doesn't have
+   * equals nothing: the game's own sync groups test instance_params.seed_offset, which never exists, so they never run.
+   * Kits without that list fall back to one stream per hand.
    */
   rollSeed(seed: number): void {
     const plan = this.inputs.rollPlan
     if (!plan.groups?.length) return this.setSeed(valveRandom(this.side === 'right' ? seed + 1 : seed))
     const hand = this.side === 'right' ? '1' : '0'
     const passes = (c: { container: string; var: string; value: string; not: boolean }) => {
-      const actual = c.var === 'seed_offset' ? hand : plan.flags?.[c.var] ?? '0'
-      return (actual === c.value) !== c.not
+      const actual = c.container === 'material_seed' && c.var === 'seed_offset' ? hand
+        : c.container === 'handedness' && c.var === 'left' ? (this.leftAttr ? '1' : '0')
+          : plan.flags?.[c.var]
+      return (actual !== undefined && actual === c.value) !== c.not
     }
     for (const group of plan.groups) {
       if (!group.when.every(passes)) continue
@@ -133,7 +143,8 @@ export class GloveV2Finish {
     const u = this.program.uniforms
     const ctx = this.context()
     for (const [name, type] of this.uniformList) u[name].value = uniformValue(this.table.ps[name], name, type, ctx)
-    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[name].value = uniformValue(this.table.vs[name], name, type, ctx)
+    // The vertex stage's own uniforms: some share a name with the fragment stage's but have their own expressions.
+    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[vsUniform(name)].value = uniformValue(this.table.vs[name], name, type, ctx)
     this.targets.render(renderer, this.quad, this.program, this.camera)
   }
 
@@ -144,12 +155,18 @@ export class GloveV2Finish {
     for (const d of this.disposers) d()
   }
 
+  /** This hand's model material has the "left" attribute (Specialist: the right hand); without that list, the left hand. */
+  private get leftAttr(): boolean {
+    return this.inputs.leftAttrSides ? this.inputs.leftAttrSides.includes(this.side) : this.side === 'left'
+  }
+
   private context(): ExprContext {
     const p = this.inputs.params
     const table = this.table
     const param = (name: string): number | number[] | string => {
       if (name in this.overrides) return this.overrides[name]
-      if (name === 'g_bFlipFixup' && this.side === 'left') return 0
+      // The vcompmat clears g_bFlipFixup on the hand whose material has the "left" attribute; the other keeps the paint's.
+      if (name === 'g_bFlipFixup' && this.leftAttr) return 0
       if (name.startsWith('g_t')) return name
       const v = p[name]
       if (typeof v === 'number') return v

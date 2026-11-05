@@ -4,7 +4,7 @@ import type { GloveItem } from '@/lib/data/items'
 import type { RandomFloat } from '@/lib/data/rng'
 import { uniformValue, type ExprContext } from '@/lib/materials/composite'
 import type { Value } from '@/lib/materials/composite-expr'
-import { GLOVE_VS_TYPES, GloveTargets, gloveVertexShader, type GloveProgram } from '@/lib/materials/glove-shared'
+import { GLOVE_VS_TYPES, GloveTargets, gloveVertexShader, vsUniform, type GloveProgram } from '@/lib/materials/glove-shared'
 
 /** A glove paint's material (the kit's vmat): its features, values and textures. */
 export interface Vmat {
@@ -97,7 +97,7 @@ export class GloveFinish {
     }
     for (const [name] of combo.uniforms) uniforms[name] = { value: null }
     for (const name of combo.textures) uniforms[name] = { value: textures[name] ?? null }
-    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[name] ??= { value: null }
+    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[vsUniform(name)] = { value: null }
     this.program = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: gloveVertexShader(combo.inputs), fragmentShader: shader.frag, uniforms,
       depthTest: false, depthWrite: false,
@@ -189,12 +189,9 @@ export class GloveFinish {
       // The seed's and the float's values win over the shader's own expressions for them.
       u[name].value = uniformValue(name in this.overrides ? undefined : table.ps[name], name, type, ctx)
     }
-    // The vertex stage's variables share names with the fragment stage's (g_vPatternTexCoordXform0/1): a name the
-    // fragment shader declares keeps its value from above, or the seed's placement would be reset to the default.
-    const fragment = new Set(this.shader.combo.uniforms.map(([name]) => name))
-    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) {
-      if (!fragment.has(name)) u[name].value = uniformValue(table.vs[name], name, type, ctx)
-    }
+    // The vertex stage's own uniforms (vsUniform): some share a name with the fragment stage's
+    // (g_vPatternTexCoordXform0/1), and one shared uniform reset the seed's placement to the vertex table's default.
+    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[vsUniform(name)].value = uniformValue(table.vs[name], name, type, ctx)
     this.targets.render(renderer, this.quad, this.program, this.camera)
   }
 
