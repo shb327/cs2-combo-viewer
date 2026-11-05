@@ -6,7 +6,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | --- | --- | --- |
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
-| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B, C done; D in progress |
+| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B, C done; D in review |
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
@@ -251,7 +251,66 @@ Done:
   weapon combos convert; the 8 compile and link with 16 samplers in Chrome. No built kit uses them yet. A combo without
   a shader still fails with "Composite combo N not exported".
 
-Next in D: the first frame sooner (item 4), the look (item 5), compress and check, docs.
+- **The first frame sooner.** Measured with `C:\cs2-data\tools\firstframe.mjs` (`loadtime.mjs` plus a PNG screencast:
+  "first visible" is the first frame where over 20% of the screen differs from the empty page), cold cache, production
+  build on `vite preview`, the reference URL, no added latency (as in C). Results and frames in
+  `C:\cs2-data\reference\compare\d4\`.
+  - The background waited for the environment (the 1.3 MB EXR and its prefiltering): the first map's background now
+    goes up as soon as it has loaded, without the veil. A thin progress bar (three.js' loading manager: files finished
+    out of files started, never going back) shows along the bottom while the embed loads, with or without its UI.
+  - The load ran in series (agent arms, glove shader, glove textures, glove model, knife textures, weapon shader, knife
+    model). The arms, the gloves and the knife now load together, each model alongside its textures, the knife's
+    composite alongside its finish, and the arm's skin textures with the gloves'.
+  - Textures decode off the main thread (`ImageBitmapLoader`: no premultiplied alpha, no colour conversion, no flip) as
+    they arrive, instead of on the main thread at the first frame; a knife's finish and its composite share each
+    decode. Kimono renders as before (54 dB against main; the differences are under one level, over the models).
+  - The four 404s are gone: `attack_index.json` and `agent_patches.json` are written empty, and the glove inspect clips
+    are fetched only when `inspect_index.json` lists them.
+
+  | Reference combo, cold cache | First visible, before | First visible, after | Loaded, before | Loaded, after |
+  | --- | --- | --- | --- | --- |
+  | Local (no throttling) | 0.8 s | 0.6 s | 4.6 s | 3.3 s |
+  | 50 Mbit/s (home) | 1.1 s | 0.6 s | 11.8 s | 11.1 s |
+  | 10 Mbit/s (slow mobile) | 4.0 s | 0.9 s | 35.1 s | 33.5 s |
+
+  "Before" is this branch's build before these changes, measured on the same day with the same tool (part C's 9.8 s
+  at 50 Mbit/s was another day; this machine measured 11.8 s today). Fully loaded is bound by the 34.6 MB: 28 s at
+  10 Mbit/s for the bytes alone, and about 3 s after the last byte for decoding, shader compiles and compositing.
+- **The look**: Combo Skin's green `#00DE12` (`oklch(0.781 0.263 142.8)`) as the primary colour and a `brand` palette
+  around it (the components' violet accents), dark text on it, the violet-tinted darks made near neutral; Montserrat,
+  the variable font as Google Fonts serves it (latin and latin-ext WOFF2, 109 KB), in `viewer/public/fonts/montserrat`
+  with its licence. No package added; the Geist font package was removed.
+- **Checks after the build**: `compress.mjs` (97 textures, 65.7 MB of WebP on disk). Big Swell from its WebPs against
+  its PNGs: 46.1 dB (C: 45 dB for Kimono), no visible difference at 2× (`d6-zoom-png-webp.png`). A Big Swell combo
+  downloads 33.1 MB.
+
+Found, not changed:
+
+- **A v2 glove combo takes about 11 s of GPU work locally** (Big Swell: loaded 12.3 s, network quiet after 1.0 s; the
+  Kimono combo 3.4 s). Most likely the compile of combo 7's fragment shader (about 2,000 lines, with the tint-ID loops)
+  under ANGLE. To look at: `KHR_parallel_shader_compile` (three's `compileAsync`), or splitting the output modes.
+- **Steam's market** answered three requests from this machine with "too many requests"; the game's own item images
+  (`panorama/images/econ/default_generated/`) are the same pictures and are in the copies.
+- `build.mjs` re-extracts every texture on each run, so `compress.mjs` then re-encodes every one (it keeps a WebP only
+  when it is newer than its PNG): fine for one combo (30 s), not for all of them.
+- Doppler phases aren't in the game's text at all: "Doppler (Ruby)" is the market's name, built from the kit name.
+
+Left (D):
+
+- An in-game screenshot of a v2 glove (Big Swell, a known seed) to check its seed placement and colour.
+- Building the glove inspect clips (`pedestal_gloves_*` are in the game) and the attack clips.
+
+## Phase 3 notes (from phase 2)
+
+- **Size of everything** (rough, from the copies' file list, not built): 20 knives, 94 glove finishes (72 classic, 22
+  newer), 141 agents, 1481 paint kits in `items_game` (the knives' share of them to be counted). The texture folders
+  the finishes draw from hold about 2,500 to 3,500 textures; at this build's average (0.68 MB of WebP per texture, PNG
+  about twice that) that is **roughly 2 GB of WebP** to host, plus about 1 GB of models and data. Shared files (weapon
+  grunge and wear, glove textiles, agents' arms) are counted once.
+- **Build time** (rough): extraction about 0.15 s per texture and compression about 0.3 s per texture on this PC:
+  **25 to 30 minutes** for everything, if the build stops re-extracting textures it already has (see above); the
+  shaders are already all built (about 6 s).
+- Each combo still loads its own 30 to 35 MB; long cache lifetimes on the shared files matter more than the total.
 
 ## Phase 2 needs (from phase 1)
 
@@ -259,5 +318,5 @@ Next in D: the first frame sooner (item 4), the look (item 5), compress and chec
 - Inspect and knife animation, forearm twist constraints: done in part B.
 - **Vertigo**: its `scenes.json` (cameras, lights, light probe, post) and HDR from `de_vertigo_vanity.vpk`, and a way to produce the background video (render it in the viewer from the map's geometry and lightmaps, or another approach to decide).
 - Textures as WebP and only what first person needs: done in part C.
-- **Newer (v2) gloves** in the build (their compositor data and roll groups), and the 8 skipped weapon combos.
+- **Newer (v2) gloves** in the build (their compositor data and roll groups), and the 8 skipped weapon combos: done in part D.
 - sRGB layer arrays stored as sRGB: done in part C.

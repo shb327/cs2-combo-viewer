@@ -80,6 +80,6 @@ C:\cs2-data\extracted\
 
 ## Adding items
 
-Add knives, gloves (with their paint kit names, as in `items_game.txt`) and agents to `items.json`, and a knife's idle and inspect clips under `firstPerson`. Classic glove paints are built; newer (v2) glove paints are reported and need their compositor data (phase 2).
+Add knives, gloves (with their paint kit names, as in `items_game.txt`) and agents to `items.json`, and a knife's idle and inspect clips under `firstPerson`. Classic and newer (v2, `gloves/paints/volatile_02/`) glove paints are both built; the v2 ones also write `texture_average.json` (each of their textures' Reflectivity, which `shader-dump extract` reports per texture).
 
 A map needs its vanity VPK in the copies and a screenshot of the map taken in game with no hands, weapon or HUD, saved in `C:\cs2-data\reference`. In `items.json`: `"maps": { "<id>": { "name": "…", "background": "C:/cs2-data/reference/<file>.jpg", "viewYaw": -30 } }`. The screenshot's own direction isn't known, so `viewYaw` turns the eye from the direction the sun's light travels (degrees, left positive), which sets where the sun lights the hands from.
