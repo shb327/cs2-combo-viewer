@@ -1,9 +1,9 @@
 import * as THREE from 'three'
-import { SHADER_DIR, comboId, fallbackTexture, type ComboInfo, type CompositeTable } from '@/lib/materials/composite'
+import { SHADER_DIR, comboId, fallbackTexture, loadCombo, type ComboInfo, type CompositeTable } from '@/lib/materials/composite'
 
 /**
  * The game's glove compositor (csgo_customglove), as the asset pipeline exports it: one table (customglove.json:
- * parameters, expressions, combos) and one fragment shader per static combo (cg_<id>.frag.glsl), both derived from the
+ * parameters, expressions) and one fragment shader per static combo (cg_<id>.frag.glsl, its first line the combo's info), both derived from the
  * game's shader and served with the assets. Classic gloves use combo 0 (or 2 with anisotropic gloss), the newer ones 7.
  */
 export interface GloveProgram {
@@ -16,7 +16,7 @@ export interface GloveProgram {
 export const GLOVE_SIZE = 2048
 
 let tablePromise: Promise<CompositeTable> | null = null
-const fragCache = new Map<string, Promise<string>>()
+const fragCache = new Map<string, string>()
 
 export function loadGloveTable(base: string): Promise<CompositeTable> {
   tablePromise ??= fetch(base + SHADER_DIR + 'customglove.json').then((r) => {
@@ -31,18 +31,11 @@ export function loadGloveTable(base: string): Promise<CompositeTable> {
 export async function loadGloveProgram(base: string, features: Record<string, number>): Promise<GloveProgram> {
   const table = await loadGloveTable(base)
   const id = String(comboId(table, features))
-  const combo = table.combos[id]
-  if (!combo) throw new Error(`Glove combo ${id} not exported (run the pipeline's shader steps)`)
+  const loaded = await loadCombo(base, table, 'cg', id)
+  if (!loaded) throw new Error(`Glove combo ${id} not exported (run the pipeline's shader steps)`)
   let frag = fragCache.get(id)
-  if (!frag) {
-    frag = fetch(base + SHADER_DIR + `cg_${id}.frag.glsl`).then((r) => {
-      if (!r.ok) throw new Error(`cg_${id}.frag.glsl: HTTP ${r.status}`)
-      return r.text()
-    }).then((t) => safeEmboss(t.replace(/\r\n/g, '\n')))
-    frag.catch(() => fragCache.delete(id))
-    fragCache.set(id, frag)
-  }
-  return { table, id, combo, frag: await frag }
+  if (frag === undefined) { frag = safeEmboss(loaded.frag); fragCache.set(id, frag) }
+  return { table, id, combo: loaded.combo, frag }
 }
 
 /** The texture families the combo samples as 4-layer arrays (g_tDetail1 … 4 → g_tDetail). */

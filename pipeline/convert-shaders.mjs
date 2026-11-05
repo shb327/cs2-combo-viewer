@@ -44,7 +44,6 @@ for (const def of SHADERS) {
     static: table.static.map((s) => s.name),
     ps: shaderVars(table.ps),
     vs: shaderVars(table.vs),
-    combos: {},
   }
   const allSets = new Set()
   const skipped = []
@@ -59,8 +58,9 @@ for (const def of SHADERS) {
       continue
     }
     result.sets.forEach((s) => allSets.add(s))
-    viewerTable.combos[id] = { values, uniforms: result.uniforms, textures: result.textures, inputs: result.inputs, sets: result.sets }
-    writeFileSync(path.join(out, `${def.prefix}_${id}.frag.glsl`), result.glsl)
+    // The combo's info rides on its shader's first line: a combo is one request, not a table of all 1144.
+    const info = { values, uniforms: result.uniforms, textures: result.textures, inputs: result.inputs, sets: result.sets }
+    writeFileSync(path.join(out, `${def.prefix}_${id}.frag.glsl`), `// combo ${JSON.stringify(info)}\n${result.glsl}`)
     converted++
   }
   if (allSets.size) viewerTable.sets = [...allSets]
