@@ -78,14 +78,14 @@ export interface Lighting {
   /** The lights keep their place relative to the camera instead of the world (always on in first person). */
   followCamera: boolean
   /**
-   * An inspect map (build_vanity.py: maps.json id) seen around the model, lighting it and in its reflections — as the
-   * game's inspect backgrounds — or null for the studio.
+   * An inspect map (build-maps.mjs: maps.json id) seen around the model, lighting it and in its reflections — as the
+   * game's inspect backgrounds — or null for the studio. Vertigo by default; a build without it falls back to the studio.
    */
   map: string | null
 }
 
 export const DEFAULT_LIGHTING: Lighting = {
-  exposure: 1, key: 2, keyColor: '#ffffff', rim: 0.6, rimColor: '#ffffff', ambient: 0.45, angle: 0, orbit: false, followCamera: false, map: null,
+  exposure: 1, key: 2, keyColor: '#ffffff', rim: 0.6, rimColor: '#ffffff', ambient: 0.45, angle: 0, orbit: false, followCamera: false, map: 'de_vertigo',
 }
 
 /** First person's viewmodel settings (like CS2's viewmodel_fov / viewmodel_offset_* / cl_righthand). */

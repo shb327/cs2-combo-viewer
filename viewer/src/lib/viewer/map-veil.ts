@@ -37,7 +37,7 @@ export class MapVeil {
   }
 
   /** Lifts the veil; a new background video (already in place) settles from a slight zoom meanwhile. */
-  reveal(video?: HTMLVideoElement | null): void {
+  reveal(video?: HTMLElement | null): void {
     if (video) {
       video.style.transform = 'scale(1.06)'
       video.style.transition = 'none'

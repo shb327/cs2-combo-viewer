@@ -49,7 +49,7 @@ export const OPTION_PARAMS: DocRow[] = [
   { name: 'float', values: '0–1', description: 'Clamped to the skin’s range; wins over an inspect link’s.', fallback: '0, or the link’s' },
   { name: 'seed', values: '1–1000', description: 'The pattern; wins over an inspect link’s.', fallback: '1, or the link’s' },
   { name: 'view', values: 'orbit · fpv', description: 'First person applies to weapons; other items stay in orbit.', fallback: 'orbit' },
-  { name: 'map', values: 'an inspect map id · studio', description: 'The background: one of the game’s inspect maps, or the studio.', fallback: 'studio' },
+  { name: 'map', values: 'an inspect map id · studio', description: 'The background: one of the game’s inspect maps, or the studio.', fallback: 'de_vertigo (studio with bg=transparent)' },
   { name: 'loadout_gloves', values: 'item|kit', description: 'The player’s skin gloves (first person, and on an agent).', fallback: 'the agent’s own' },
   { name: 'loadout_gloves_float', values: '0–1', description: 'Those gloves’ float.', fallback: '0.15' },
   { name: 'loadout_gloves_seed', values: '1–1000', description: 'Those gloves’ pattern.', fallback: 'the gloves’ own' },

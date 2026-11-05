@@ -88,6 +88,22 @@ export function patchEnvDiffuse(root: THREE.Object3D, uniform: { value: number }
 }
 
 /** A map's pre-rendered background video (muted, looping), or null when there is none. */
+/**
+ * A map's background: its pre-rendered video (backgrounds/<id>.mp4), else a still image (backgrounds/<id>.jpg, a
+ * screenshot taken in game), drawn behind the canvas, or null when it has neither.
+ */
+export async function loadBackground(base: string): Promise<HTMLVideoElement | HTMLImageElement | null> {
+  return (await loadBackgroundVideo(base + '.mp4')) ?? loadBackgroundImage(base + '.jpg')
+}
+
+function loadBackgroundImage(url: string): Promise<HTMLImageElement | null> {
+  const image = new Image()
+  Object.assign(image.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: '0' })
+  image.decoding = 'async'
+  image.src = url
+  return image.decode().then(() => image, () => null)
+}
+
 export function loadBackgroundVideo(url: string): Promise<HTMLVideoElement | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video')
