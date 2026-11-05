@@ -183,7 +183,12 @@ export class GloveFinish {
       // The seed's and the float's values win over the shader's own expressions for them.
       u[name].value = uniformValue(name in this.overrides ? undefined : table.ps[name], name, type, ctx)
     }
-    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[name].value = uniformValue(table.vs[name], name, type, ctx)
+    // The vertex stage's variables share names with the fragment stage's (g_vPatternTexCoordXform0/1): a name the
+    // fragment shader declares keeps its value from above, or the seed's placement would be reset to the default.
+    const fragment = new Set(this.shader.combo.uniforms.map(([name]) => name))
+    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) {
+      if (!fragment.has(name)) u[name].value = uniformValue(table.vs[name], name, type, ctx)
+    }
     this.targets.render(renderer, this.quad, this.program, this.camera)
   }
 
