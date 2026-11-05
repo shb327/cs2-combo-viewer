@@ -6,7 +6,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | --- | --- | --- |
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
-| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B done; C in review |
+| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B, C done; D in progress |
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
@@ -211,16 +211,47 @@ Left (C):
   models (the viewer has the decoder) would need gltfpack, a tool to approve.
 - Four optional files still 404 per load (`firstperson/inspect/gloves_*.json`, `attack_index.json`, `agent_patches.json`).
 
-### D: names, more finishes, the look
+### D: names, more finishes, the look (branch `phase-2d-names`)
 
-- Real item names instead of the stand-in ("Specialist Gloves | Specialist Gloves" in the panel).
-- The newer (v2) glove finishes in the build (their compositor data and roll groups), and the shared-uniform check above.
-- The 8 skipped weapon shader combos (17 textures). Their info goes on their shader's first line like the others
-  (`convert-shaders.mjs`); a combo with no shader file is reported as not exported.
-- Combo Skin's look: green `#00DE12`, Montserrat.
-- From C: run `node pipeline\compress.mjs` after the build (new kits' textures need their WebPs); a v2 glove's
-  compositor inputs are "data" (near-lossless) unless a draw call lists them as `color`. Check new finishes against
-  their PNGs as in C (render PSNR, a zoomed crop).
+Images in `C:\cs2-data\reference\compare\d*`.
+
+Done:
+
+- **Names.** The pipeline's names were right; the panel prefixed the item twice ("Specialist Gloves | Specialist
+  Gloves | Crimson Kimono", cut off). The catalog's skin `name` is now the finish only, as the viewer reads it.
+  Doppler and Gamma Doppler kits share one name in the game's text (no phase anywhere in `csgo_english.txt`); the
+  build adds the market's phase from the kit name: "Doppler (Ruby)", "Doppler (Phase 2)", "Gamma Doppler (Emerald)".
+  The agent field shows the default agent's name ("Lt. Commander Ricksaw | NSWC SEAL") instead of "Default CT Agent".
+- **Newer (v2) gloves.** The 26 kits in `gloves/paints/volatile_02/` (22 in `items_game`, ids 1398–1440; all 72 older
+  kits are classic). Their vcompmat names the paint as a loose resource-material variable
+  (`items/assets/paintkits/volatile_02/<kit>.vmat`, a `csgo_customglove_preview` material) and starts every pass from
+  `workshop/paintkits/templates/glove_compositor.vmat`; both are read, conditions with `m_bPassWhenTrue: false` are
+  negated, and the 12 roll groups keep their conditions (`when`). Their compositor combo is 7 (3 without
+  `F_TINT_ID`); its colour matrices call `TextureAverageColor`, the vtex Reflectivity, which `shader-dump` now reports
+  per texture and the build writes as `texture_average.json` (only the v2 kits' textures). Combo 7 declared an array of
+  arrays (GLSL ES 3.10); `convert-shaders.mjs` flattens them.
+  - Rolls: the right hand (`seed_offset` 1) rolls each material offset and the pattern from `g_nRandomSeedAlt`, then
+    burns 11 rolls (`consumable_random_numbers`) and rolls damage and grime. The "sync" groups test
+    `instance_params.seed_offset`, which doesn't exist, so they never run (as in the game, presumably).
+  - The flip: the vcompmat clears `g_bFlipFixup` on the hand whose material has the `left` attribute (Specialist: the
+    right), now read from the model instead of assuming the left hand.
+  - **Shared uniforms (from A):** combo 7's fragment shader declares none of the vertex stage's variables, so there was
+    no clash for v2; combos 0 and 2 (classic) do (`g_vPatternTexCoordXform0/1`). The vertex stage now has its own
+    uniforms (`vs_<name>`, `vsUniform`) in both paths. Crimson Kimono renders as before (59.4 dB against main: the
+    noise floor).
+  - Tested: **Specialist Gloves | Big Swell** (`glove_specialist_wave_blue`), seed 1, float 0.07, against the game's own
+    item image (`panorama/images/econ/default_generated/specialist_gloves_glove_specialist_wave_blue_light_png`, the
+    picture Steam shows; Steam's market rate-limited the page after three requests, so it was left alone):
+    `d1-bigswell-solo.png`, `d1-bigswell-1.png`. The wave print, the cream "TORTUE" plates with gold bars, the blue suede
+    fingertips and the dark knuckle panel match, at the same scale; the viewer's blues are a little more saturated.
+    The icon's seed is unknown, so where the wave sits differs. Not checked against an in-game screenshot.
+- **The 8 weapon combos at 17 textures** (gunsmith with case hardening, overlay, pearlescence, metalness and roughness
+  textures, combos 4292–5741): `g_tPaintMetalness` and `g_tPaintRoughness` (both linear, one channel, same sampler and
+  coordinates) share a 2-layer array (`packs` in the combo's info), packed at runtime like the glove families. All 1152
+  weapon combos convert; the 8 compile and link with 16 samplers in Chrome. No built kit uses them yet. A combo without
+  a shader still fails with "Composite combo N not exported".
+
+Next in D: the first frame sooner (item 4), the look (item 5), compress and check, docs.
 
 ## Phase 2 needs (from phase 1)
 
