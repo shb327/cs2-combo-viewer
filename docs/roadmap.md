@@ -33,7 +33,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 
 Phase 2 is split into parts, one branch and one pull request each. Every check uses Specialist Gloves | Crimson Kimono at
 pattern seed 269 holding Karambit | Doppler (Ruby), Terrorist agent, against reference screenshots taken in game. The
-screenshots live in `C:\cs2-dataeference` (never in git): `kimono-seed269.jpg` (1280×676, the reference, taken on another
+screenshots live in `C:\cs2-data\reference` (never in git): `kimono-seed269.jpg` (1280×676, the reference, taken on another
 map) and `vertigo-background.jpg` (3840×2160, Vertigo with no hands, weapon or HUD).
 
 ### A: the gloves right, on Vertigo (branch `phase-2a-gloves`)
@@ -80,7 +80,7 @@ Left (A):
   background); the hands are not graded with it.
 - sRGB layer arrays and the composited maps are 8-bit linear (banding in dark tones): see part C.
 
-Tools (outside git, `C:\cs2-data	ools`): `shot.mjs` (headless Chrome screenshot of the dev server over the DevTools
+Tools (outside git, `C:\cs2-data\tools`): `shot.mjs` (headless Chrome screenshot of the dev server over the DevTools
 protocol, `EVAL`/`SAVE` to run code and save data URLs), `compose.mjs` (crops, side by side or as 50% overlays). The
 reference URL: `/embed?skin=weapon_knife_karambit%7Cam_ruby_marbleized&view=fpv&loadout_gloves=specialist_gloves%7Cspecialist_kimono_diamonds_red&loadout_gloves_seed=269&loadout_gloves_float=0.15&loadout_agent=customplayer_t_map_based&ui=0&viewmodel_sway=0`.
 
