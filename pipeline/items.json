@@ -1,24 +1,8 @@
 {
-  "knives": {
-    "weapon_knife_karambit": [
-      "am_ruby_marbleized"
-    ]
-  },
-  "gloves": {
-    "specialist_gloves": [
-      "specialist_kimono_diamonds_red",
-      "glove_specialist_wave_blue"
-    ]
-  },
-  "agents": [
-    "customplayer_t_map_based",
-    "customplayer_ctm_st6_varianti"
-  ],
-  "firstPerson": {
-    "weapon_knife_karambit": {
-      "idle": "idle1_karambit",
-      "inspect": "lookat01_karambit"
-    }
+  "catalog": {
+    "repo": "ByMykel/CSGO-API",
+    "commit": "cbe5eec1854bf882bf1d79d8d5fd2aac7d80e5bc",
+    "files": ["public/api/en/skins.json", "public/api/en/agents.json"]
   },
   "maps": {
     "de_vertigo": {
