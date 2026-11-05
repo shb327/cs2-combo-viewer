@@ -133,6 +133,9 @@ export const STYLE_NAMES: Record<number, string> = {
 /** Styles the viewer renders (the rest show the bare weapon for now). */
 export const PORTED_STYLES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
+/** The finish a knife without a paint kit is built as (paint index 0): the model's own materials. */
+export const VANILLA = 'vanilla'
+
 export const styleName = (s: { style: number | null; shader: string | null }) =>
   s.shader === 'csgo_customglove.vfx' ? 'Gloves' : s.style !== null ? STYLE_NAMES[s.style] ?? `Style ${s.style}` : 'Unknown'
 
@@ -209,7 +212,7 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
   const common = {
     id: `${item.name}|${kit.name}`,
     title: `${item.displayName} | ${kit.displayName}`,
-    subtitle: `Paint kit ${kit.index} · ${styleName(kit)} · float ${kit.floatMin} – ${kit.floatMax}`,
+    subtitle: kit.name === VANILLA ? 'No finish · Vanilla' : `Paint kit ${kit.index} · ${styleName(kit)} · float ${kit.floatMin} – ${kit.floatMax}`,
     floatMin: kit.floatMin, floatMax: kit.floatMax, seed,
     model: GAME_ROOT + item.glb,
   }
@@ -319,5 +322,5 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
     case 7: if (pattern && masks) return { ...common, ...weapon, style: 'patina', colors, masks, paint: pattern }; break
     case 8: if (pattern && masks) return { ...common, ...weapon, style: 'gunsmith', colors, masks, paint: pattern }; break
   }
-  return { ...common, ...weapon, style: 'bare', styleName: styleName(kit) }
+  return { ...common, ...weapon, style: 'bare', styleName: kit.name === VANILLA ? 'Vanilla' : styleName(kit) }
 }

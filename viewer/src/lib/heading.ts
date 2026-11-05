@@ -69,7 +69,7 @@ export function headingFor(selection: Selection, item: Item | null, skin: Catalo
   return {
     over: weapon,
     title: skin ? variantName(skin) : baseFinish,
-    chips: [subtitle[0], item.style === 'bare' ? item.styleName + ' · not ported yet' : subtitle[1] ?? STYLE_LABEL[item.style]],
+    chips: [subtitle[0], item.style === 'bare' && item.styleName !== 'Vanilla' ? item.styleName + ' · not ported yet' : subtitle[1] ?? STYLE_LABEL[item.style]],
     color,
   }
 }
