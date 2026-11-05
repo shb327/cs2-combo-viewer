@@ -300,6 +300,69 @@ Left (D):
 - An in-game screenshot of a v2 glove (Big Swell, a known seed) to check its seed placement and colour.
 - Building the glove inspect clips (`pedestal_gloves_*` are in the game) and the attack clips.
 
+## Phase 3: parts
+
+Phase 3 is coverage: every knife, glove and agent Combo Skin can show, built and checked, so the PC is only needed when
+CS2 adds items. Two parts, one branch and pull request each: A builds and checks everything locally; B uploads it to
+Cloudflare R2 (after the bucket exists).
+
+### A: build everything, locally (branch `phase-3a-coverage`)
+
+Status: **in progress** (this list is kept current so a new session can pick up).
+
+- [x] Incremental build (below).
+- [x] The build list from Combo Skin's catalog (below).
+- [x] Full build and `compress.mjs`.
+- [ ] Automated check of every item, contact sheets, coverage report.
+- [ ] Spot checks against the game's item images.
+- [ ] Hosting layout and totals in `docs/asset-format.md`.
+- [ ] The v2 glove's slow first render.
+
+#### What to build: the catalog
+
+`pipeline/items.json` pins the catalog (ByMykel/CSGO-API `public/api/en/skins.json` and `agents.json` at commit
+`cbe5eec1854bf882bf1d79d8d5fd2aac7d80e5bc`); `node pipeline/fetch-catalog.mjs` fetches them once into
+`C:\cs2-data\catalog\cbe5eec\` (outside git). `pipeline/lib/catalog.mjs` turns them into the build list: knives and gloves
+by item definition index (`weapon.weapon_id`) and paint index (Doppler and Gamma Doppler phases have their own), agents
+by item definition index (`def_index`), each resolved against `items_game`. Nothing is typed by hand; to follow the site,
+change the pinned commit.
+
+- Knives: 20 types, 576 finishes, of which 20 vanilla (no paint index: built as the `vanilla` finish, paint index 0, the
+  model's own materials, the viewer's `bare` style; the viewer labels it "Vanilla").
+- Gloves: 8 types, 94 finishes (72 classic, 22 newer).
+- Agents: 63, every agent in the catalog. `items_game` has 141 `customplayer_*` items: the other 78 are all "Default T
+  Agent" / "Default CT Agent" entries (map-based defaults on 16 models), which the site can't show; they're listed in the
+  build report, not built.
+- Every catalog entry resolves (no unknown item or paint index), and the game has no knife or glove finish with an item
+  image (`panorama/images/econ/default_generated/<item>_<kit>_light_png`) that the catalog lacks: the two agree.
+- Each knife's first-person clips are found from its model's folder (`weapons/models/knife/knife_m9/…` →
+  `animation/anims/viewmodel/knife/knife_m9/idle1_m9`, `lookat01_m9`), so every knife has its idle and inspect.
+
+#### Incremental build
+
+- `shader-dump index` lists pak01 with each file's CRC32 (from the VPK's directory, 0.5 s for 137,844 files). The build
+  reads it every run (`work/pak01_index.txt`, rewritten only when the copy changed).
+- Every extraction job is cached in `work/cache/extract.json` under a key of the job, the source file's CRC32 (with the
+  model's folder for models, the skeletons for clips) and a hash of the tool's binaries; a job whose key is unchanged and
+  whose output exists isn't run. Every JSON and GLB is written only when its bytes change.
+- `compress.mjs` keeps `work/compress/manifest.json` (each PNG's size, date, SHA-1, mode): a PNG with the same content is
+  never re-encoded, even when extracted again.
+- **How to tell what changed** after a CS2 update (recopy the VPKs first, see `C:\cs2-data\VERSION.md`), from
+  `C:\cs2-data\extracted\work\`: `changes.json` (written by the last build that changed anything) has `source` (pak01
+  files added, changed, removed by CRC since the previous build), `redone` (the files decoded again, and why: new,
+  source changed, output missing) and `rewritten` (viewer files whose bytes changed); `compress/encoded.json` the
+  textures the last compress re-encoded; `build-report.json` what was built, what failed and the catalog comparison.
+
+| Run | build.mjs | compress.mjs |
+| --- | --- | --- |
+| Full (empty cache) | 2 min 33 s (1,149 files decoded) | 3 min 47 s (856 textures, 1,344 MB PNG → 639 MB WebP) |
+| Nothing changed | 3.5 s, nothing decoded or written | 0.2 s, nothing encoded or written |
+
+#### Where it stopped
+
+(Kept current.) Built: everything in the catalog, compressed. Next: the check run (`node pipeline\check.mjs`, needs
+`vite preview` on port 5321), then the spot checks.
+
 ## Phase 3 notes (from phase 2)
 
 - **Size of everything** (rough, from the copies' file list, not built): 20 knives, 94 glove finishes (72 classic, 22
