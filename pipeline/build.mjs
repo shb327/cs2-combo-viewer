@@ -13,6 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { extract, PAK01, runTool } from './lib/extract.mjs'
 import { parseKv1, parseLocalization } from './lib/kv1.mjs'
+import { filterGlb } from './lib/glb.mjs'
 import { boneHash, parseKv3 } from './lib/kv3.mjs'
 import { EXTRACTED, GAME_ROOT, VIEWER_DATA, insideRoot, parseArgs } from './lib/paths.mjs'
 
@@ -129,7 +130,13 @@ for (const kit of allKits) {
   kit.paint = strip(kit.containers.paint?.m_strSpecificContainerMaterial ?? '')
   if (!kit.paint) throw new Error(`${kit.name}: no paint material in its vcompmat`)
 }
-const modelMaterials = models.flatMap((m) => modelInfo(m).meshes.flatMap((me) => me.drawCalls.map((c) => c.material)))
+/**
+ * The materials to extract: every mesh of the knives and gloves; of the agents only the first-person groups (their arms),
+ * unless items.json sets agentBodies (the third-person agent view needs the body's textures too).
+ */
+const agentModels = new Set(agents.map((a) => a.model_player))
+const usedMeshes = (m) => modelInfo(m).meshes.filter((me) => config.agentBodies || !agentModels.has(m) || /^firstperson/.test(me.name))
+const modelMaterials = models.flatMap((m) => usedMeshes(m).flatMap((me) => me.drawCalls.map((c) => c.material)))
 loadMaterials([...allKits.map((k) => k.paint), ...modelMaterials], 'jobs-3')
 
 // ── Round 3: the knives' composite inputs ──────────────────────────────────────────────────────────────────────────
@@ -406,12 +413,15 @@ for (const { def, kits } of gloves) {
 }
 written.push(writeJson('index.json', index))
 
-// Agents: their models' first-person groups and skeleton.
+// Agents: their models' first-person groups and skeleton. First person loads glb, a copy of the model with only its
+// first-person meshes (<model>.fp.glb); the third-person agent view loads body, the whole model.
 const agentIndex = { agents: [], models: {} }
 for (const a of agents) {
   const info = modelInfo(a.model_player)
   const key = path.basename(a.model_player, '.vmdl')
-  agentIndex.models[key] = { glb: glbPath(a.model_player), body: glbPath(a.model_player), skeleton: skeleton(info), drawCalls: meshDrawCalls(info) }
+  const fpGlb = glbPath(a.model_player).replace(/\.glb$/, '.fp.glb')
+  filterGlb(path.join(GAME_ROOT, glbPath(a.model_player)), insideRoot(EXTRACTED, path.join(GAME_ROOT, fpGlb)), (name) => /\.firstperson_[^.]*$/.test(name))
+  agentIndex.models[key] = { glb: fpGlb, body: glbPath(a.model_player), skeleton: skeleton(info), drawCalls: meshDrawCalls(info) }
   const team = a.used_by_classes?.terrorists ? 't' : 'ct'
   agentIndex.agents.push({ id: a.name, index: a.index, name: tr(a.item_name), model: key, team, rarity: a.item_rarity ?? null })
 }
@@ -475,7 +485,8 @@ for (const [file, empty] of Object.entries({
 })) written.push(writeJson(file, empty))
 
 // ── Sizes ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-const size = (f) => (existsSync(f) ? statSync(f).size : 0)
+/** A file's size; a texture's WebP when compress.mjs has made one (the viewer loads it first). */
+const size = (f) => { const webp = f.replace(/\.png$/, '.webp'); return existsSync(webp) && statSync(webp).mtimeMs >= statSync(f).mtimeMs ? statSync(webp).size : existsSync(f) ? statSync(f).size : 0 }
 const mb = (n) => (n / 1048576).toFixed(1) + ' MB'
 const sumFiles = (files) => [...new Set(files)].reduce((s, f) => s + size(f), 0)
 const gameFile = (rel) => path.join(GAME_ROOT, rel)
@@ -491,7 +502,7 @@ for (const { def, kits } of [...knives, ...gloves]) {
 for (const a of agents) {
   const info = modelInfo(a.model_player)
   const fpMats = info.meshes.filter((me) => /^firstperson/.test(me.name)).flatMap((me) => me.drawCalls.map((c) => c.material))
-  report[a.name] = { model: mb(size(gameFile(glbPath(a.model_player)))), firstPersonTextures: mb(sumFiles(texturesOf(fpMats))) }
+  report[a.name] = { model: mb(size(gameFile(glbPath(a.model_player).replace(/\.glb$/, '.fp.glb')))), firstPersonTextures: mb(sumFiles(texturesOf(fpMats))) }
 }
 writeFileSync(path.join(WORK, 'sizes.json'), JSON.stringify(report, null, 2))
 console.log(`build: ${written.length} viewer files in ${VIEWER_DATA}`)

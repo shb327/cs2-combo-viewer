@@ -2,7 +2,7 @@ import { cpSync, createReadStream, existsSync, readdirSync, readFileSync, stat }
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Connect, type Plugin } from 'vite'
 
 /**
  * The build copies public/ without public/assets: the game assets are served from elsewhere (VITE_ASSET_BASE).
@@ -30,25 +30,27 @@ const CONTENT_TYPES: Record<string, string> = {
   '.exr': 'image/x-exr', '.hdr': 'image/vnd.radiance', '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.bin': 'application/octet-stream',
 }
 
-/** Serves /assets/* from the local asset folder in development; a file that isn't there is a 404. */
+/** Serves /assets/* from the local asset folder in development and preview; a file that isn't there is a 404. */
 function localAssets(dir: string): Plugin {
   const root = path.resolve(dir)
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    const rel = decodeURIComponent((req.url ?? '/').split('?')[0])
+    const file = path.resolve(root, '.' + rel)
+    if (!file.startsWith(root + path.sep)) { res.statusCode = 403; res.end(); return }
+    stat(file, (err, st) => {
+      if (err || !st.isFile()) { if (rel.endsWith('/')) next(); else { res.statusCode = 404; res.end() } return }
+      res.setHeader('Content-Type', CONTENT_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream')
+      res.setHeader('Content-Length', st.size)
+      res.setHeader('Cache-Control', 'no-cache')
+      createReadStream(file).pipe(res)
+    })
+  }
   return {
     name: 'local-assets',
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use('/assets', (req, res, next) => {
-        const rel = decodeURIComponent((req.url ?? '/').split('?')[0])
-        const file = path.resolve(root, '.' + rel)
-        if (!file.startsWith(root + path.sep)) { res.statusCode = 403; res.end(); return }
-        stat(file, (err, st) => {
-          if (err || !st.isFile()) { if (rel.endsWith('/')) next(); else { res.statusCode = 404; res.end() } return }
-          res.setHeader('Content-Type', CONTENT_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream')
-          res.setHeader('Content-Length', st.size)
-          res.setHeader('Cache-Control', 'no-cache')
-          createReadStream(file).pipe(res)
-        })
-      })
+    configureServer(server) { server.middlewares.use('/assets', handler) },
+    // The build's own scripts are under /assets/ too: preview only takes the asset folder's paths.
+    configurePreviewServer(server) {
+      server.middlewares.use('/assets', (req, res, next) => (req.url?.startsWith('/extracted/') ? handler(req, res, next) : next()))
     },
   }
 }

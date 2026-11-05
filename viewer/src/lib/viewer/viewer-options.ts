@@ -93,9 +93,10 @@ export interface Viewmodel {
   /** viewmodel_fov (54–68): the horizontal angle in degrees on a 4:3 screen, as Source has it (see viewmodelVerticalFov). */
   fov: number
   /**
-   * viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. The defaults (FOV 59, offsets 1.25, 0.25, 1.25)
-   * are fitted to a game screenshot taken with unknown settings (the overlap of the red glove and blade pixels), not the
-   * game's own defaults.
+   * viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. The defaults (FOV 54, offsets 0.75, -1, 2)
+   * start from a fit to a game screenshot (FOV 59, offsets 1.25, 0.25, 1.25: the overlap of the red glove and blade
+   * pixels) and bring the hands closer, so the gloves and the knife fill more of the view while both hands and the
+   * blade stay whole on 16:9. All within the game's ranges, so the embed can set them too.
    */
   offsetX: number
   offsetY: number
@@ -110,14 +111,17 @@ export interface Viewmodel {
 }
 
 export const DEFAULT_VIEWMODEL: Viewmodel = {
-  fov: 59, offsetX: 1.25, offsetY: 0.25, offsetZ: 1.25, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
+  fov: 54, offsetX: 0.75, offsetY: -1, offsetZ: 2, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
 }
 
 /**
  * The camera's vertical angle for a viewmodel_fov, taken as the horizontal angle on a 4:3 screen (Source's convention,
- * kept on wider screens). Read as the 16:9 horizontal angle, the hands needed offsets past the game's range to match.
+ * kept on wider screens: they show more at the sides). Read as the 16:9 horizontal angle, the hands needed offsets past
+ * the game's range to match. On screens narrower than 16:9 (a phone held upright) the vertical angle grows so the
+ * horizontal one stays 16:9's: both hands and the blade stay in frame, smaller, instead of being cut at the sides.
  */
-export function viewmodelVerticalFov(fov: number): number {
+export function viewmodelVerticalFov(fov: number, aspect = 16 / 9): number {
   const rad = Math.PI / 180
-  return (2 * Math.atan(Math.tan((fov * rad) / 2) * (3 / 4))) / rad
+  const tan = Math.tan((fov * rad) / 2) * (3 / 4) * Math.max(1, 16 / 9 / aspect)
+  return (2 * Math.atan(tan)) / rad
 }

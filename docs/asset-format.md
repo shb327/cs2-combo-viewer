@@ -32,6 +32,10 @@ All paths inside the JSON are relative to `extracted/game/` unless noted. Every 
 ## Textures
 
 - `.png` paths in the JSON; the viewer tries `<name>.webp` first, then the `.png` (`lib/viewer/textures.ts`). `flipY = false`, repeat wrapping.
+- `pipeline/compress.mjs` writes the WebPs: albedos (draw calls' `color`, the knives' composite colour) lossy at
+  quality 90 with lossless alpha; every other texture near-lossless (they pack data in all four channels, which lossy
+  WebP would mix); the RGB under zero alpha is kept; textures over 2048 are halved (the compositors render at 2048).
+  Hosting needs only the WebPs.
 - Float textures (the weapons' position maps) are `.exr`, loaded as is.
 - sRGB or linear is decided by the caller: base colours, grunge and AO are sRGB; normals, masks, roughness, wear are linear. For the compositing shaders, each texture follows the shader's own `SrgbRead` flag (`ps[name].srgb` in the shader table), the pattern being sRGB only for paint styles 6 and up.
 - Classic glove kits keep their material's `.vtex` paths; the viewer swaps `.vtex` for `.png`.
@@ -92,10 +96,16 @@ Built by `pipeline/shader-dump` and `pipeline/convert-shaders.mjs`; derived from
 ```ts
 // customweapon.json, customglove.json
 { shader, features: string[], static: string[] /* static combos, S_PAINT_STYLE first */, sets?: string[],
-  ps: { [var]: { default: number[], elements, int?, srgb?, expr?: Instr[] } }, vs: { … },
-  combos: { [id]: { values, uniforms: [name, glslType][], textures: string[], inputs: { [location]: varying }, sets: string[] } } }
+  ps: { [var]: { default: number[], elements, int?, srgb?, expr?: Instr[] } }, vs: { … } }
 Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by lib/materials/composite-expr.ts
+
+// the first line of each cw_<id>.frag.glsl / cg_<id>.frag.glsl: the combo's info
+// combo { values, uniforms: [name, glslType][], textures: string[], inputs: { [location]: varying }, sets: string[] }
 ```
+
+- A combo's info rides on its shader's first line (`lib/materials/composite.ts`, `loadCombo`): a combo costs one
+  request, and the weapon table is 44 KB instead of 1.5 MB with all 1144 combos. A table with `combos` (the older
+  format) still loads.
 
 - Combo id: mixed radix over `static`, 9 values for `S_PAINT_STYLE`, 2 for every other (the game's own numbering).
 - Fragment shaders: GLSL ES 3.00 without `#version`, plain `uniform` declarations, one output, inputs named as `combo.inputs` (the vertex shaders are rebuilt in the viewer's code). Layer families of 4 textures (glove detail, grunge, damage…) are packed into `sampler2DArray`s to stay under WebGL's 16 textures.
@@ -107,6 +117,10 @@ Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by 
 { agents: { id /* customplayer_t_map_based */, index, name, model, team: 't' | 'ct', rarity }[],
   models: { [model]: { glb, body, skeleton: ArmsSkeleton, drawCalls: { [mesh]: DrawCall[] } } } }
 ```
+
+`glb` is `<model>.fp.glb`, the model with only its `firstperson_*` meshes (Ricksaw: 0.7 MB instead of 3.3 MB), loaded
+by first person; `body` is the whole model, for the third-person agent view (its body's textures are built only with
+`"agentBodies": true` in `items.json`).
 
 First person uses the mesh groups `firstperson_sleeves` (always) and `firstperson_default_gloves_arms` (when no skin gloves; its `bare_arm` material gives the skin colour under skin gloves). A model without `firstperson_sleeves` (Ricksaw: bare forearms) draws no sleeves. The default agent is `customplayer_ctm_st6_varianti` (Lt. Commander Ricksaw | NSWC SEAL).
 
@@ -132,8 +146,8 @@ Built by `pipeline/build-maps.mjs` (Vertigo so far). The studio background needs
 | File | Content |
 | --- | --- |
 | `maps.json` | `{ id, name, hdr, thumb }[]`: the maps on offer |
-| `maps/<id>.hdr` or `maps/<id>.exr` | the environment (reflections): the vanity scene's baked cubemap as an equirectangular EXR |
-| `backgrounds/<id>.mp4` or `backgrounds/<id>.jpg` | drawn behind the canvas: a pre-rendered video, else a still screenshot taken in game (Vertigo: the user's own, 3840×2160) |
+| `maps/<id>.hdr` or `maps/<id>.exr` | the environment (reflections): the vanity scene's baked cubemap as an equirectangular EXR, half-float RGB with ZIP compression (Vertigo 1024×512: 1.4 MB) |
+| `backgrounds/<id>-<width>.webp`, `backgrounds/<id>.mp4` or `backgrounds/<id>.jpg` | drawn behind the canvas: a still screenshot taken in game (Vertigo: the user's own, 3840×2160) as WebP in the widths its scene lists, the smallest covering the canvas on the visitor's screen (at most 2× pixel ratio) is loaded; without those a pre-rendered video, else the JPEG |
 | `scenes.json` | `InspectSceneData[]` (`lib/viewer/inspect-scene.ts`): with `glb: null` only the lights and cameras are used |
 
-The `scenes.json` entry for a still background: `camera` (the eye: origin, level, its `forward` turned `viewYaw` from the sun), `exposure` (the middle of the post volume's range), and `weapon` with one camera (`"3"`, the same), `sun` (`light_environment`: `direction` where its light travels in glTF axes, `color` sRGB 0–1, `brightness`) and `ambientCube` (+X, −X, +Y, −Y, +Z, −Z radiance: the sky colour × intensity ÷ π above, the sky ambient bounce below, their mean at the sides). In first person the item is lit by the sun and the ambient cube; the environment only reflects.
+The `scenes.json` entry for a still background: `background` (`{ widths, aspect }`: the WebP widths, 960 to 3840, and the screenshot's aspect), `camera` (the eye: origin, level, its `forward` turned `viewYaw` from the sun), `exposure` (the middle of the post volume's range), and `weapon` with one camera (`"3"`, the same), `sun` (`light_environment`: `direction` where its light travels in glTF axes, `color` sRGB 0–1, `brightness`) and `ambientCube` (+X, −X, +Y, −Y, +Z, −Z radiance: the sky colour × intensity ÷ π above, the sky ambient bounce below, their mean at the sides). In first person the item is lit by the sun and the ambient cube; the environment only reflects.

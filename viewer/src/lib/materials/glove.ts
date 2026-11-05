@@ -41,8 +41,14 @@ void main() { oColor = texture(uSrc, vUv); }`
  */
 export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[]): { texture: THREE.Texture; dispose: () => void } {
   const { width, height } = layers[0].image as { width: number; height: number }
+  /**
+   * An sRGB family (the shader reads it as sRGB) is stored as sRGB (SRGB8_ALPHA8): the copy writes linear values and the
+   * GPU encodes them, so dark tones keep their precision instead of banding in an 8-bit linear target.
+   */
+  const srgb = layers.some((l) => l.colorSpace === THREE.SRGBColorSpace)
   const target = new THREE.WebGLArrayRenderTarget(width, height, layers.length, {
     generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping,
+    colorSpace: srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace,
   })
   target.texture.wrapS = target.texture.wrapT = THREE.RepeatWrapping
   const copy = new THREE.RawShaderMaterial({

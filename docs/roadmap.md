@@ -6,7 +6,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | --- | --- | --- |
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
-| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A done; B in review (PR #3) |
+| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B done; C in review |
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
@@ -151,26 +151,82 @@ Left (B):
 - Colour and brightness on Vertigo (above).
 - The inspect against a game video; the left hand's last differences (fingers a little more curled in the viewer).
 
-### C: smaller downloads
+### C: framing and smaller downloads (branch `phase-2c-size`)
 
-- WebP (or KTX2) textures: about 112 MB per combo today as PNG; an encoder is a tool to approve first.
-- Only what first person needs (the build also extracts the third-person body's textures). Ricksaw's first-person
-  textures are 19.4 MB, his model 3.2 MB (the Default T Agent stays in the build as a choice: 31.8 MB, 1.9 MB).
-- sRGB layer arrays stored as sRGB (`SRGB8_ALPHA8`) and the composited albedo too, instead of 8-bit linear.
-- The background as WebP or AVIF (the screenshot is a 960 KB JPEG).
+Measured with `C:\cs2-data\tools\loadtime.mjs` (headless Chrome, cold cache, the production build on `vite preview`,
+which now serves the asset folder too): the reference URL, the time the embed posts `cs3d:loaded`. Results and images
+in `C:\cs2-data\reference\compare\c*`.
+
+Before: one combo downloaded **82.4 MB** in 121 requests (44 of them `.webp` misses; the 112 MB counted every shader,
+not what a combo loads): 4.0 s locally, 18.7 s at 50 Mbit/s, 72 s at 10 Mbit/s.
+
+Done:
+
+- **Framing**: defaults FOV 54, offsets 0.75 / −1 / 2 (were 59, 1.25 / 0.25 / 1.25): the hands about 1.15× bigger,
+  both hands and the blade whole on 16:9; all in the game's ranges, so the embed can set them. Screens narrower than
+  16:9 keep 16:9's horizontal angle (a phone held upright showed only the middle before). The app's saved viewmodel
+  moved to `viewmodel-v4`. `C1-FRAMING-BEFORE-AFTER.png`.
+- **WebP** (`pipeline/compress.mjs`, cwebp 1.6.0 from Google's release, in `C:\dev\tools`): albedos lossy (q 90),
+  everything else near-lossless (packed channels: lossy WebP mixes them, PSNR 22–28 dB on normals); RGB under zero alpha
+  kept (`-exact`); textures over 2048 halved (both compositors render at 2048: the 4096 glove AO was 21.9 MB). The
+  viewer already loads `.webp` first. 82.4 → 44.2 MB; a render differs from PNG by 45 dB PSNR (noise floor 59 dB),
+  not visible at 2× zoom (`c2-zoom-png-webp.png`).
+- **sRGB storage**: packed layer families with sRGB layers and the composited glove albedo are `SRGB8_ALPHA8`
+  (render 54 dB from before: only dark-tone precision changes; no banding was visible under Vertigo's light either way).
+- **Agents in first person only**: agents' `glb` is `<model>.fp.glb` (only the `firstperson_*` meshes; Ricksaw 0.69 MB,
+  was 3.33 MB), `body` stays the whole model for the agent view; the agents' body textures are built only with
+  `"agentBodies": true` (the build went from 99 to 61 textures, 149 to 113 MB of PNG on disk).
+- **Shaders**: each combo's info is the first line of its shader, not one table of all 1144 (`customweapon.json`
+  1.57 MB → 44 KB, `customglove.json` 92 → 59 KB).
+- **Background**: WebP in widths 960 to 3840 (37 to 327 KB; the JPEG is 960 KB), listed in the scene; the viewer loads
+  the smallest that covers its canvas at the screen's pixel ratio (1280×720 at 1×: the 1280 one, 59 KB). The `.mp4`
+  probe is skipped for maps with a still.
+- **Environment**: the EXR rewritten as half-float RGB, ZIP (`pipeline/lib/exr.mjs`): 5.85 → 1.36 MB, 0.05% error.
+
+After: **34.6 MB** in 81 requests (−58%): 4.0 s locally (unchanged: the rest is shader compiles and compositing on the
+GPU, about 2.3 s after the last byte), **9.8 s at 50 Mbit/s** (was 18.7), **32 s at 10 Mbit/s** (was 72).
+
+| One combo (cold cache) | Before | After |
+| --- | --- | --- |
+| Knife: Karambit model and textures | 9.2 MB | 4.7 MB |
+| Finish: Doppler (Ruby), with the weapon-wide grunge and wear (5.6 + 2.5 MB, shared by every weapon finish) | 18.1 MB | 9.4 MB |
+| Gloves: Specialist model and textures | 28.2 MB | 9.5 MB |
+| Glove finish: Crimson Kimono | 8.5 MB | 5.2 MB |
+| Agent arms: Ricksaw | 9.5 MB | 3.7 MB |
+| Shaders | 1.7 MB | 0.15 MB |
+| Background | 0.96 MB | 0.06 MB |
+| Environment (reflections) | 5.9 MB | 1.4 MB |
+| App code | 0.44 MB | 0.44 MB |
+
+Left (C):
+
+- The biggest files now: the weapon grunge (5.6 MB), the glove AO (5.0 MB, 2048) and normal (3.3 MB), the paint wear
+  (2.5 MB), the arm normal (2.4 MB): data textures, near-lossless. cwebp skips near-lossless on some (the glove normal,
+  the glove AO, `smoke2`: lossless size). Going further needs lossy data textures (checked per texture against renders)
+  or GPU formats.
+- A host's gzip saves about 2 MB more (the models and JSON: 3.6 → 1.5 MB); `.webp` and `.exr` are compressed already.
+  For phase 3's hosting, with long cache lifetimes: the weapon grunge and wear, the gloves' textiles and the agent's
+  arms are shared between combos.
+- KTX2 / Basis (not done): smaller in GPU memory (phones), not in download; a phase 6 option. Meshopt compression of the
+  models (the viewer has the decoder) would need gltfpack, a tool to approve.
+- Four optional files still 404 per load (`firstperson/inspect/gloves_*.json`, `attack_index.json`, `agent_patches.json`).
 
 ### D: names, more finishes, the look
 
 - Real item names instead of the stand-in ("Specialist Gloves | Specialist Gloves" in the panel).
 - The newer (v2) glove finishes in the build (their compositor data and roll groups), and the shared-uniform check above.
-- The 8 skipped weapon shader combos (17 textures).
+- The 8 skipped weapon shader combos (17 textures). Their info goes on their shader's first line like the others
+  (`convert-shaders.mjs`); a combo with no shader file is reported as not exported.
 - Combo Skin's look: green `#00DE12`, Montserrat.
+- From C: run `node pipeline\compress.mjs` after the build (new kits' textures need their WebPs); a v2 glove's
+  compositor inputs are "data" (near-lossless) unless a draw call lists them as `color`. Check new finishes against
+  their PNGs as in C (render PSNR, a zoomed crop).
 
 ## Phase 2 needs (from phase 1)
 
 - **Side-by-side check with the game**: reference screenshots of the combo from the game, taken by you; fix what differs (wear at several floats, pattern seeds, lighting, colour).
 - Inspect and knife animation, forearm twist constraints: done in part B.
 - **Vertigo**: its `scenes.json` (cameras, lights, light probe, post) and HDR from `de_vertigo_vanity.vpk`, and a way to produce the background video (render it in the viewer from the map's geometry and lightmaps, or another approach to decide).
-- **Textures as WebP** (needs an encoder; a tool to approve), and only the textures first person needs (the build also extracts the third-person body's).
+- Textures as WebP and only what first person needs: done in part C.
 - **Newer (v2) gloves** in the build (their compositor data and roll groups), and the 8 skipped weapon combos.
-- sRGB layer arrays stored as sRGB (now packed as 8-bit linear, losing precision in dark tones).
+- sRGB layer arrays stored as sRGB: done in part C.

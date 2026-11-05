@@ -11,7 +11,33 @@ export interface CompositeTable {
   static: string[]
   ps: Record<string, ShaderVar>
   vs: Record<string, ShaderVar>
-  combos: Record<string, ComboInfo>
+  /** Older tables listed every combo here; now each combo's shader carries its own (see loadCombo). */
+  combos?: Record<string, ComboInfo>
+}
+
+const COMBO_HEADER = '// combo '
+const comboCache = new Map<string, Promise<{ combo: ComboInfo; frag: string } | null>>()
+
+/**
+ * A static combo's fragment shader (`<prefix>_<id>.frag.glsl`) and its info (uniforms, textures, inputs), which the
+ * shader's first line carries as JSON (`// combo {…}`): a combo costs one small request instead of a table of all of them.
+ * Null when the combo wasn't exported.
+ */
+export function loadCombo(base: string, table: CompositeTable, prefix: string, id: string): Promise<{ combo: ComboInfo; frag: string } | null> {
+  const key = prefix + id
+  let entry = comboCache.get(key)
+  if (!entry) {
+    entry = fetch(base + SHADER_DIR + `${prefix}_${id}.frag.glsl`).then(async (r) => {
+      if (!r.ok) return null
+      const text = (await r.text()).replace(/\r\n/g, '\n')
+      if (!text.startsWith(COMBO_HEADER)) return table.combos?.[id] ? { combo: table.combos[id], frag: text } : null
+      const end = text.indexOf('\n')
+      return { combo: JSON.parse(text.slice(COMBO_HEADER.length, end)) as ComboInfo, frag: text.slice(end + 1) }
+    })
+    entry.catch(() => comboCache.delete(key))
+    comboCache.set(key, entry)
+  }
+  return entry
 }
 
 export const SHADER_DIR = 'extracted/viewer/shaders/'
@@ -27,7 +53,6 @@ function loadChannels(base: string): Promise<Record<string, number>> {
   channelsPromise ??= fetch(base + 'extracted/viewer/texture_channels.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
   return channelsPromise
 }
-const fragCache = new Map<string, Promise<string>>()
 
 export function loadCompositeTable(base: string): Promise<CompositeTable> {
   tablePromise ??= fetch(base + SHADER_DIR + 'customweapon.json').then((r) => {
@@ -65,13 +90,9 @@ class CompositePass {
     loadTexture: (path: string, srgb: boolean) => Promise<THREE.Texture>): Promise<CompositePass> {
     const features = Object.fromEntries(Object.entries(inputs.params).filter(([k]) => k.startsWith('F_')).map(([k, v]) => [k, Number(v)]))
     const id = String(comboId(table, features))
-    const combo = table.combos[id]
-    if (!combo) throw new Error(`Composite combo ${id} not exported (run port_weapon_shader.py)`)
-    let frag = fragCache.get(id)
-    if (!frag) {
-      frag = fetch(base + SHADER_DIR + `cw_${id}.frag.glsl`).then((r) => r.text())
-      fragCache.set(id, frag)
-    }
+    const loaded = await loadCombo(base, table, 'cw', id)
+    if (!loaded) throw new Error(`Composite combo ${id} not exported (run the pipeline's shader steps)`)
+    const { combo, frag } = loaded
     const textures: Record<string, THREE.Texture> = {}
     await Promise.all(combo.textures.map(async (name) => {
       const path = inputs.textures[name]
@@ -89,7 +110,7 @@ class CompositePass {
       pattern.wrapT = addressMode(inputs.params.g_nPatternTextureVerticalSampling)
       pattern.needsUpdate = true
     }
-    return new CompositePass(renderer, table, combo, await frag, inputs, textures)
+    return new CompositePass(renderer, table, combo, frag, inputs, textures)
   }
 
   private constructor(renderer: THREE.WebGLRenderer, private readonly table: CompositeTable, private readonly combo: ComboInfo,
