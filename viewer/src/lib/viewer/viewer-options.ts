@@ -90,9 +90,12 @@ export const DEFAULT_LIGHTING: Lighting = {
 
 /** First person's viewmodel settings (like CS2's viewmodel_fov / viewmodel_offset_* / cl_righthand). */
 export interface Viewmodel {
-  /** Vertical field of view in degrees, as viewmodel_fov (54–68). */
+  /** viewmodel_fov (54–68): the horizontal angle in degrees on a 16:9 screen (see viewmodelVerticalFov). */
   fov: number
-  /** viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. CS2's defaults are 2.5, 0, −1.5. */
+  /**
+   * viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. The defaults (0.5, 0, 1) are fitted to a game
+   * screenshot taken with unknown settings, not the game's own defaults.
+   */
   offsetX: number
   offsetY: number
   offsetZ: number
@@ -106,5 +109,11 @@ export interface Viewmodel {
 }
 
 export const DEFAULT_VIEWMODEL: Viewmodel = {
-  fov: 68, offsetX: 2.5, offsetY: 0, offsetZ: -1.5, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
+  fov: 68, offsetX: 0.5, offsetY: 0, offsetZ: 1, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
+}
+
+/** The camera's vertical angle for a viewmodel_fov, taken as the horizontal angle on a 16:9 screen. */
+export function viewmodelVerticalFov(fov: number): number {
+  const rad = Math.PI / 180
+  return (2 * Math.atan(Math.tan((fov * rad) / 2) * (9 / 16))) / rad
 }
