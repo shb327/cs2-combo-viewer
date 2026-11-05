@@ -4,7 +4,7 @@ A browser 3D viewer for Counter-Strike 2 knife and glove combinations: a skinned
 
 It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site for finding good-looking glove and knife combos, where every combo page will offer a 3D view next to its screenshot.
 
-**Status:** phase 1 done: a Karambit in Specialist Gloves, first person, built from the game files by our own pipeline. Phase 2 (that combo matching the game) is in progress: part A, the gloves on a Vertigo background. See the [roadmap](docs/roadmap.md).
+**Status:** phase 1 done: a Karambit in Specialist Gloves, first person, built from the game files by our own pipeline. Phase 2 (that combo matching the game) is in progress: part A (the gloves on a Vertigo background) is done, part B (the hands and the knife) is in review. See the [roadmap](docs/roadmap.md).
 
 ## Layout
 
