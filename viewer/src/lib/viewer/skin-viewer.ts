@@ -273,22 +273,27 @@ export class SkinViewer {
     const index = await json<Record<string, string>>(base + 'index.json')
     const file = index[name]
     if (!file) throw new Error('No first-person pose for ' + name)
+    /**
+     * The models and their finishes start now, next to the clips: the download is the slow part, and these are its bulk.
+     * The glove inspect clips are fetched only when the inspect index lists them.
+     */
+    const patchLayers: PatchLayer[] = []
+    const parts: RigPart[] = []
+    const models = Promise.all([this.loader.firstPersonArms(agentId, glove, parts, patchLayers), this.loader.weapon(item)])
+    models.catch(() => {})
+    const inspectIndex = json<Record<string, string>>(base + 'inspect_index.json').catch(() => ({} as Record<string, string>))
     const [pose, binds, inspect, gloveInspect, idleLoop, attacks] = await Promise.all([
       json<ViewmodelPose>(base + file),
       json<Record<string, WeaponBind>>(base + 'weapon_binds.json').catch(() => ({} as Record<string, WeaponBind>)),
-      json<Record<string, string>>(base + 'inspect_index.json')
-        .then((idx) => idx[name] ? json<InspectClip>(base + 'inspect/' + idx[name]) : null)
-        .catch(() => null),
-      glove ? this.loader.gloveInspectClips().catch(() => null) : Promise.resolve(null),
+      inspectIndex.then((idx) => idx[name] ? json<InspectClip>(base + 'inspect/' + idx[name]) : null).catch(() => null),
+      inspectIndex.then((idx) => glove && idx.gloves_deploy && idx.gloves_anim ? this.loader.gloveInspectClips() : null).catch(() => null),
       json<Record<string, string>>(base + 'idle_index.json')
         .then((idx) => idx[file] ? json<InspectClip>(base + 'idle/' + idx[file]) : null)
         .catch(() => null),
       json<Record<string, AttackEntry[]>>(base + 'attack_index.json').then((idx) => sortAttacks(idx[name] ?? [])).catch(() => [] as AttackEntry[]),
     ])
-    const rig: FirstPersonRig = { idle: pose, idleLoop, inspect, attacks, gloveInspect, parts: [], weapon: null, bind: binds[name] }
-    const patchLayers: PatchLayer[] = []
-    const armsRoot = await this.loader.firstPersonArms(agentId, glove, rig.parts, patchLayers)
-    const weapon = await this.loader.weapon(item)
+    const rig: FirstPersonRig = { idle: pose, idleLoop, inspect, attacks, gloveInspect, parts, weapon: null, bind: binds[name] }
+    const [armsRoot, weapon] = await models
     await this.loader.rigWeapon(item, weapon)
     if (token !== this.loadToken) return
     weapon.matrixAutoUpdate = false
