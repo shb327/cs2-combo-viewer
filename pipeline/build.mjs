@@ -13,6 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { extract, PAK01, runTool } from './lib/extract.mjs'
 import { parseKv1, parseLocalization } from './lib/kv1.mjs'
+import { boneHash, parseKv3 } from './lib/kv3.mjs'
 import { EXTRACTED, GAME_ROOT, VIEWER_DATA, insideRoot, parseArgs } from './lib/paths.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -312,7 +313,25 @@ function drawCall(materialPath) {
 }
 const meshDrawCalls = (info) => Object.fromEntries(info.meshes.map((me) => [me.name, me.drawCalls.map((c) => drawCall(c.material))]))
 const glbPath = (m) => m.replace(/\.vmdl$/, '.glb')
-const skeleton = (info) => ({ bones: info.skeleton.bones, parents: info.skeleton.parents, pos: info.skeleton.pos, rot: info.skeleton.rot, twists: [] })
+/**
+ * A model's CTiltTwistConstraints (its key values' BoneConstraintList, bones named by hash): each twist bone takes
+ * `weight` × its target's roll about `targetAxis`, measured from `offset` (m_qOffset, xyzw), turned about its own `axis`.
+ */
+function twistConstraints(info) {
+  const text = info.keyValueText
+  if (!text) return []
+  const names = new Map(info.skeleton.bones.map((b) => [boneHash(b), b]))
+  const out = []
+  for (const c of parseKv3(text).BoneConstraintList ?? []) {
+    if (c._class !== 'CTiltTwistConstraint') continue
+    const target = c.m_targets?.[0], slave = c.m_slaves?.[0]
+    const bone = names.get(slave?.m_nBoneHash), of = names.get(target?.m_nBoneHash)
+    if (!bone || !of) continue
+    out.push({ bone, target: of, weight: slave.m_flWeight * (target.m_flWeight ?? 1), targetAxis: c.m_nTargetAxis ?? 0, axis: c.m_nSlaveAxis ?? 0, offset: target.m_qOffset })
+  }
+  return out
+}
+const skeleton = (info) => ({ bones: info.skeleton.bones, parents: info.skeleton.parents, pos: info.skeleton.pos, rot: info.skeleton.rot, twists: twistConstraints(info) })
 
 // ── Viewer JSON ────────────────────────────────────────────────────────────────────────────────────────────────────
 const index = { items: {}, skins: [] }

@@ -6,8 +6,11 @@ export interface BonePose { bones: string[]; parents: number[]; pose: [number[],
 export interface ViewmodelPose { clip: string; viewmodel: BonePose; weapon?: BonePose & { skeleton: string } }
 /** The arm / glove models' skeleton: bind pose in the parent's space (Source units). */
 export interface ArmsSkeleton { bones: string[]; parents: number[]; pos: number[][]; rot: number[][]; twists?: TwistConstraint[] }
-/** A twist bone taking `weight` × its target's roll about `targetAxis`, around its own `axis` (0 x, 1 y, 2 z). */
-export interface TwistConstraint { bone: string; target: string; weight: number; targetAxis: number; axis: number }
+/**
+ * A twist bone taking `weight` × its target's roll about `targetAxis`, around its own `axis` (0 x, 1 y, 2 z): the
+ * model's CTiltTwistConstraint. `offset` (m_qOffset, xyzw) is the target's parent-space rest the roll is measured from.
+ */
+export interface TwistConstraint { bone: string; target: string; weight: number; targetAxis: number; axis: number; offset?: number[] }
 
 
 /** Source (x forward, y left, z up, inches) → glTF as the exported models have it: (y, z, x) × 0.0254. */
@@ -118,19 +121,6 @@ export function adoptAncestors(part: ArmsSkeleton, full: ArmsSkeleton): ArmsSkel
   return out
 }
 
-/** The arm model's bones that the viewmodel skeleton names differently. */
-/**
- * The agents' CTiltTwistConstraint target offsets (m_qOffset, xyzw): the rest the game measures the target's roll from.
- * Every agent shares them (prefab); they match the bind pose except on the upper arm (~30° off; arm_upper_R_TWIST1 has
- * its own), where measuring from the bind turned the upper-arm twist bones up to ~17° off in the menu idles.
- */
-const TWIST_OFFSET: Record<string, THREE.Quaternion> = Object.fromEntries(Object.entries({
-  arm_lower_L_TWIST: [0.685, -0.003, 0.036, 0.728], arm_lower_L_TWIST1: [0.685, -0.003, 0.036, 0.728],
-  arm_lower_R_TWIST: [0.685, -0.003, 0.036, 0.728], arm_lower_R_TWIST1: [0.685, -0.003, 0.036, 0.728],
-  arm_upper_L_TWIST: [0.039, -0.063, 0.344, 0.936], arm_upper_L_TWIST1: [0.039, -0.063, 0.344, 0.936],
-  arm_upper_R_TWIST: [0.039, -0.063, 0.344, 0.936], arm_upper_R_TWIST1: [0.141, -0.307, 0.164, 0.927],
-}).map(([bone, q]) => [bone, new THREE.Quaternion(...q).normalize()]))
-
 const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]
 
 /** The roll (radians) of rotation `q` about `axis`: its swing-twist decomposition's twist angle. */
@@ -179,7 +169,8 @@ export function skinMatrices(arms: ArmsSkeleton, vm: ViewmodelPose): THREE.Matri
     const t = c && index.get(c.target)
     if (c && t !== undefined) {
       const tp = arms.parents[t]
-      const offset = TWIST_OFFSET[name]
+      /** Measuring from the bind instead turns the upper arm's twist bones (rest ~30° off the bind) up to ~17° off. */
+      const offset = c.offset && new THREE.Quaternion(...c.offset).normalize()
       let roll: number
       if (offset && tp >= 0) {
         /** As the game: the target's parent-space rotation measured from the constraint's own rest (m_qOffset), zero at bind. */
