@@ -35,3 +35,7 @@ The viewer started from the [ChainSkins 3D Viewer](https://github.com/ChainSkins
 Models, textures, shaders and maps belong to Valve and are not in this repository. They are extracted locally from a Counter-Strike 2 installation.
 
 Not affiliated with or endorsed by Valve Corporation. Counter-Strike and CS2 are trademarks of Valve Corporation.
+
+## Licence
+
+The code in this repository is under the [MIT licence](LICENSE). The code that came from ChainSkins keeps its own MIT licence in [viewer/LICENSE](viewer/LICENSE), and other third-party notices are in [viewer/THIRD_PARTY_NOTICES.md](viewer/THIRD_PARTY_NOTICES.md).
