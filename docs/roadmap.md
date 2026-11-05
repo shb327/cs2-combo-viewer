@@ -9,7 +9,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | In progress: A |
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
-| 5. Screenshots | Headless rendering of a combo to images (Terrorist agent on Vertigo) | |
+| 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
 
 ## Decisions
@@ -17,7 +17,22 @@ Each phase ends with something that runs. Later phases are rough and will change
 - Start from the MIT-licensed ChainSkins viewer (React, TypeScript, Vite, three.js, WebGL2), imported as a filtered copy into `viewer/` (see `viewer/UPSTREAM.md`).
 - The pipeline builds on the ValveResourceFormat library (C#, `pipeline/shader-dump`) and Node scripts.
 - The game's own compositing shaders are used, exported per static combo and converted to WebGL2; the generated code stays with the assets, out of git.
-- Default view and every combo screenshot: a Terrorist agent on Vertigo. Visitors will later choose the map and the agent, so the viewer's map, agent and viewmodel support stays.
+- Default view and every combo screenshot: Lt. Commander Ricksaw | NSWC SEAL (a CT agent, bare dark forearms) on Vertigo,
+  unless the combo passes its own agent. Until phase 2B the default was the Default T Agent (Phoenix), whose light arms
+  didn't match the reference. Visitors will later choose the map and the agent, so the viewer's map, agent and viewmodel
+  support stays.
+
+## How an agent is chosen
+
+- Built agents are listed in `pipeline/items.json` (`agents`, by item name from `items_game.txt`: Ricksaw is
+  `customplayer_ctm_st6_varianti`, model `agents/models/ctm_st6/ctm_st6_varianti.vmdl`). Only built agents can be shown.
+- Default: `DEFAULT_AGENT` in `viewer/src/lib/data/agents.ts` (`customplayer_ctm_st6_varianti`), the same in the app and
+  the embed.
+- Per load: the embed's `loadout_agent=<id>` URL parameter, or `loadout_agent` in the options of `cs3d:load` /
+  `cs3d:set`; in the app, `fpa=<id>` (else the visitor's last pick, else the default). A combo screenshot passes its
+  own agent this way (for example to show custom sleeves).
+- First person draws the agent's `firstperson_sleeves` (Ricksaw has none) and, under skin gloves, the glove model's arm
+  in the agent's skin (`bare_arm_*` from `firstperson_default_gloves_arms`; Ricksaw: `bare_arm_135`).
 
 ## Phase 1: what was learned
 
@@ -32,7 +47,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 ## Phase 2: parts
 
 Phase 2 is split into parts, one branch and one pull request each. Every check uses Specialist Gloves | Crimson Kimono at
-pattern seed 269 holding Karambit | Doppler (Ruby), Terrorist agent, against reference screenshots taken in game. The
+pattern seed 269 holding Karambit | Doppler (Ruby), Ricksaw (the reference's agent; Terrorist in part A), against reference screenshots taken in game. The
 screenshots live in `C:\cs2-data\reference` (never in git): `kimono-seed269.jpg` (1280×676, the reference, taken on another
 map) and `vertigo-background.jpg` (3840×2160, Vertigo with no hands, weapon or HUD).
 
@@ -65,8 +80,8 @@ Found, not changed:
   code. The viewer gives it seed + 1, the left hand the seed; renders of 268–270 per hand were compared with the reference
   and + 1 fits as well as any, but it isn't proven. The kit JSON lists the rolls twice: they're the two conditional roll
   sets (seed and alt seed), not a bug.
-- The arms' skin: the Default T Agent (Phoenix) uses `bare_arm_133` (light); the reference has dark arms (another T
-  variant on that map).
+- The arms' skin: the Default T Agent (Phoenix) uses `bare_arm_133` (light); the reference's agent is Ricksaw
+  (`bare_arm_135`, dark), the default since part B.
 - The v2 glove path (`glove2.ts`) evaluates both stages' expressions into the same shared uniforms too; with combo 7 the
   vertex stage reads them, so its fragment and vertex values can't differ. To check with part D.
 
@@ -82,7 +97,7 @@ Left (A):
 
 Tools (outside git, `C:\cs2-data\tools`): `shot.mjs` (headless Chrome screenshot of the dev server over the DevTools
 protocol, `EVAL`/`SAVE` to run code and save data URLs), `compose.mjs` (crops, side by side or as 50% overlays). The
-reference URL: `/embed?skin=weapon_knife_karambit%7Cam_ruby_marbleized&view=fpv&loadout_gloves=specialist_gloves%7Cspecialist_kimono_diamonds_red&loadout_gloves_seed=269&loadout_gloves_float=0.15&loadout_agent=customplayer_t_map_based&ui=0&viewmodel_sway=0`.
+reference URL: `/embed?skin=weapon_knife_karambit%7Cam_ruby_marbleized&view=fpv&loadout_gloves=specialist_gloves%7Cspecialist_kimono_diamonds_red&loadout_gloves_seed=269&loadout_gloves_float=0.15&ui=0&viewmodel_sway=0`.
 
 ### B: the knife in the hand and the inspect (next)
 

@@ -62,7 +62,7 @@ export const OPTION_PARAMS: DocRow[] = [
   { name: 'agent_patches', values: 'id~size,…', description: 'The patches an agent wears: one entry per slot (3), comma-separated, an empty entry leaves the slot empty (agent_patches=4588~1.15,,4584). id is a patch kit id; size scales the patch (1 as designed, 0.5–1.5).', fallback: 'none, or the link’s' },
   { name: 'pet_color', values: '0–12', description: 'A pet shown on its own: its colour, as an index (0 is the first; the egg and the chick have one, the catalana 13, the silkie 9, the polish 12). Clamped to the pet’s colours.', fallback: '0' },
   { name: 'pet_animation', values: 'a clip name', description: 'A pet shown on its own: the clip it plays in a loop (chick_idle03, chick_trick05 for a dance, chick_walk, chick_egg_reaction01 for the egg…). The names are the file names behind the viewer’s Animation panel; an unknown name plays the default idle.', fallback: 'its first idle' },
-  { name: 'loadout_agent', values: 'customplayer_…', description: 'The agent whose arms and sleeves first person shows.', fallback: 'the default CT agent' },
+  { name: 'loadout_agent', values: 'customplayer_…', description: 'The agent whose arms and sleeves first person shows (each load can pass its own).', fallback: 'Lt. Commander Ricksaw | NSWC SEAL (customplayer_ctm_st6_varianti)' },
   { name: 'stickers', values: 'id~slot~wear~x~y~rotation~scale,…', description: 'The weapon’s stickers, comma-separated; first load only.', fallback: 'none, or the link’s' },
   { name: 'viewmodel_sway', values: '0', description: 'First person’s weapon stops swaying with the pointer.', fallback: 'on' },
   { name: 'viewmodel_left_hand', values: '1', description: 'First person holds the weapon in the left hand.', fallback: 'off' },

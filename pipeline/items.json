@@ -10,7 +10,8 @@
     ]
   },
   "agents": [
-    "customplayer_t_map_based"
+    "customplayer_t_map_based",
+    "customplayer_ctm_st6_varianti"
   ],
   "firstPerson": {
     "weapon_knife_karambit": {

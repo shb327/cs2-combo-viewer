@@ -51,7 +51,7 @@ node pipeline\build-maps.mjs
 Then start the viewer (`cd viewer; npm.cmd run dev`) and open, for example:
 
 ```
-http://127.0.0.1:5320/skin/weapon_knife_karambit/am_ruby_marbleized?fp=1&fpg=specialist_gloves%7Cspecialist_kimono_diamonds_red&fpa=customplayer_t_map_based
+http://127.0.0.1:5320/skin/weapon_knife_karambit/am_ruby_marbleized?fp=1&fpg=specialist_gloves%7Cspecialist_kimono_diamonds_red
 ```
 
 `CS2_SOURCE`, `CS2_EXTRACTED`, `CS2_REFERENCE` and `SHADER_DUMP` override the default folders and the tool's path.

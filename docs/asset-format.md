@@ -108,7 +108,7 @@ Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by 
   models: { [model]: { glb, body, skeleton: ArmsSkeleton, drawCalls: { [mesh]: DrawCall[] } } } }
 ```
 
-First person uses the mesh groups `firstperson_sleeves` (always) and `firstperson_default_gloves_arms` (when no skin gloves; its `bare_arm` material gives the skin colour under skin gloves). The default agent is `customplayer_t_map_based`.
+First person uses the mesh groups `firstperson_sleeves` (always) and `firstperson_default_gloves_arms` (when no skin gloves; its `bare_arm` material gives the skin colour under skin gloves). A model without `firstperson_sleeves` (Ricksaw: bare forearms) draws no sleeves. The default agent is `customplayer_ctm_st6_varianti` (Lt. Commander Ricksaw | NSWC SEAL).
 
 ## `firstperson/`
 

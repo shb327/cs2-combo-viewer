@@ -27,10 +27,10 @@ export interface AgentIndex {
 }
 
 /**
- * The agent whose arms first person shows when none is chosen: the default Terrorist (Phoenix). Combo views and their
- * screenshots use it, since the default Counter-Terrorist sleeves cover the gloves.
+ * The agent whose arms first person shows when none is chosen (app and embed): Lt. Commander Ricksaw | NSWC SEAL, a CT
+ * agent with bare forearms, so the gloves show whole. Combo views and their screenshots use it unless they pass their own.
  */
-export const DEFAULT_AGENT = 'customplayer_t_map_based'
+export const DEFAULT_AGENT = 'customplayer_ctm_st6_varianti'
 
 const loaded = new Map<string, Promise<AgentIndex>>()
 
