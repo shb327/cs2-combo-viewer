@@ -513,6 +513,10 @@ written.push(writeJson('firstperson/idle_index.json', fp.idle))
 written.push(writeJson('firstperson/weapon_skeletons.json', weaponSkeletons))
 written.push(writeJson('firstperson/weapon_binds.json', weaponBinds))
 written.push(writeJson('firstperson/arms_models.json', armsModels))
+// Attack clips and agent patch slots aren't built yet: empty indexes, so the viewer doesn't ask for files that aren't
+// there. The glove inspect clips are fetched only when inspect_index.json lists them (gloves_deploy, gloves_anim).
+written.push(writeJson('firstperson/attack_index.json', {}))
+written.push(writeJson('agent_patches.json', {}))
 const firstGlove = Object.values(armsModels)[0]
 if (firstGlove) written.push(writeJson('firstperson/arms.json', firstGlove))
 
