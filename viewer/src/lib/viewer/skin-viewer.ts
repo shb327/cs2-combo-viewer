@@ -1167,12 +1167,8 @@ export class SkinViewer {
   private resize(): void {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1
     this.camera.aspect = w / h
-    /**
-     * viewmodel_fov is the viewmodel's horizontal angle on a 16:9 screen (68 → 41.6 vertical): checked against a game
-     * screenshot, where the vertical reading (68) and the horizontal-at-4:3 one (53.6) both drew the hands about 1.3x to
-     * 1.6x too small. The canvas' shape only crops the sides.
-     */
-    this.camera.fov = this.firstPerson ? viewmodelVerticalFov(this.viewmodel.fov) : 35
+    /** First person: viewmodel_fov as the game reads it (see viewmodelVerticalFov), widened on screens narrower than 16:9. */
+    this.camera.fov = this.firstPerson ? viewmodelVerticalFov(this.viewmodel.fov, this.camera.aspect) : 35
     this.camera.updateProjectionMatrix()
     if (!this.firstPerson) this.fixed.fitFov()
     this.renderer.setSize(w, h)
