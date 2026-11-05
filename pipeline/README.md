@@ -13,7 +13,8 @@ Builds the viewer's data from copies of the CS2 game files. See [docs/asset-form
 | `shader-dump/` | C# tool on the [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat) library. `shader-dump --vpk … --shader …` writes a compositing shader's parameter table and the GLSL of each static combo; `shader-dump extract` decodes models (GLB plus skeleton and draw calls), materials, KV3 files, textures, animation clips and map entity lumps into exact paths, from pak01 or a map's vanity VPK; `shader-dump list` lists a VPK. It opens only the VPK it's given (no game folder lookup). |
 | `convert-shaders.mjs` | Turns the dumped Vulkan GLSL into WebGL2 fragment shaders and tables for the viewer. |
 | `build.mjs` | For the items in `items.json`: extracts what they need and writes the viewer's JSON (catalog, items, kits, agents, first person). |
-| `build-maps.mjs` | For the maps in `items.json`: the background (your screenshot), the environment, and the sun and sky light from the map's vanity VPK (`maps.json`, `scenes.json`). |
+| `build-maps.mjs` | For the maps in `items.json`: the background (your screenshot, as WebP in five widths), the environment (half-float EXR), and the sun and sky light from the map's vanity VPK (`maps.json`, `scenes.json`). |
+| `compress.mjs` | A WebP next to every extracted PNG (the viewer loads it first): albedos lossy, everything else near-lossless, over 2048 halved. |
 | `items.json` | Which knives, gloves, kits, agents and maps to build. |
 | `lib/` | Paths and their guards, the C# tool runner, a KeyValues parser. |
 
@@ -23,7 +24,11 @@ Builds the viewer's data from copies of the CS2 game files. See [docs/asset-form
 2. Node.js (LTS).
 3. The .NET 10 SDK, portable, in `C:\dev\tools\dotnet-sdk-10` (the official zip from Microsoft, checked against its SHA-512).
 4. The ValveResourceFormat 20.1 package from its [official release](https://github.com/ValveResourceFormat/ValveResourceFormat/releases/tag/20.1), saved as `C:\dev\tools\vrf-feed\ValveResourceFormat.20.1.7467.nupkg` (`nuget.config` uses that folder; the other packages come from nuget.org).
-5. Build the tool (PowerShell). The cache and the build output stay under `C:\dev\tools`:
+5. cwebp 1.6.0, Google's libwebp release for Windows (`libwebp-1.6.0-windows-x64.zip` from
+   `storage.googleapis.com/downloads.webmproject.org/releases/webp`, checked against its `.asc` signature: key
+   `6B0E6B70976DE303EDF2F601F9C3D6BDB8232B5D`, "WebP release signing key"), unzipped in `C:\dev\tools` (`CWEBP`
+   overrides the path).
+6. Build the tool (PowerShell). The cache and the build output stay under `C:\dev\tools`:
 
    ```powershell
    $env:DOTNET_ROOT='C:\dev\tools\dotnet-sdk-10'; $env:DOTNET_CLI_HOME='C:\dev\tools\dotnet-home'
@@ -46,15 +51,20 @@ node pipeline\convert-shaders.mjs
 node pipeline\build.mjs
 # 3. The maps (a few seconds)
 node pipeline\build-maps.mjs
+# 4. The textures as WebP (about 20 s the first time; unchanged ones are kept)
+node pipeline\compress.mjs
 ```
 
-Then start the viewer (`cd viewer; npm.cmd run dev`) and open, for example:
+Then start the viewer (`cd viewer; npm.cmd run dev`, or `npm.cmd run build; npm.cmd run preview` for the production
+build on port 5321) and open, for example:
 
 ```
 http://127.0.0.1:5320/skin/weapon_knife_karambit/am_ruby_marbleized?fp=1&fpg=specialist_gloves%7Cspecialist_kimono_diamonds_red
 ```
 
-`CS2_SOURCE`, `CS2_EXTRACTED`, `CS2_REFERENCE` and `SHADER_DUMP` override the default folders and the tool's path.
+`CS2_SOURCE`, `CS2_EXTRACTED`, `CS2_REFERENCE`, `SHADER_DUMP` and `CWEBP` override the default folders and the tools'
+paths. Only the agents' first-person meshes and textures are built; `"agentBodies": true` in `items.json` adds their
+bodies' textures (for the third-person agent view, which loads the whole model).
 
 ## Output
 
@@ -62,7 +72,7 @@ http://127.0.0.1:5320/skin/weapon_knife_karambit/am_ruby_marbleized?fp=1&fpg=spe
 C:\cs2-data\extracted\
   shaders-raw\              the game's shaders as dumped (Vulkan GLSL, tables)
   work\                     intermediate files: material and KV3 dumps, items_game, localization, job reports, sizes.json
-  web\extracted\game\       models and textures at their game paths
+  web\extracted\game\       models and textures at their game paths (textures as PNG and WebP, agents also <model>.fp.glb)
   web\extracted\viewer\     the viewer's JSON and converted shaders
 ```
 
