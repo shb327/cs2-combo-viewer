@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { EmbedStatus } from '@/components/embed/embed-status'
+import { LoadProgress } from '@/components/embed/load-progress'
 import { FrozenFrame } from '@/components/embed/frozen-frame'
 import { ShareDialog } from '@/components/stage/share-button'
 import { StudioBackdrop } from '@/components/stage/studio-backdrop'
@@ -81,6 +82,7 @@ export function EmbedPage() {
       <div ref={viewportRef} className="absolute inset-0" />
       {frozen && <FrozenFrame canvas={frozen} thawing={thawing} />}
       {initial.ui && <EmbedStatus loading={loading && !!target} error={error} />}
+      <LoadProgress loading={loading && !!target} />
       <ShareDialog share={shareOpen} onClose={() => setShareOpen(null)} />
     </main>
   )
