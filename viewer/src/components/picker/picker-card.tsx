@@ -22,9 +22,9 @@ export function PickerCard({ card, current, onPick }: PickerCardProps) {
       style={{ '--rarity': card.color } as CSSProperties}
       className={cn(
         // No backdrop-filter: there can be hundreds of these on screen.
-        'group/card tile tilt-card relative flex flex-col gap-2 p-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_1px_0_oklch(1_0_0/10%),0_3px_0_oklch(0.12_0_0),0_12px_24px_-14px_oklch(0_0_0/80%)]',
+        'group/card tile tilt-card relative flex flex-col gap-2 p-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent shadow-[inset_0_1px_0_oklch(1_0_0/10%),0_3px_0_oklch(0.12_0_0),0_12px_24px_-14px_oklch(0_0_0/80%)]',
         'hover:border-[color-mix(in_oklch,var(--rarity),transparent_45%)] hover:shadow-[inset_0_1px_0_oklch(1_0_0/14%),0_3px_0_oklch(0.12_0_0),0_18px_34px_-16px_oklch(0_0_0/85%)]',
-        current && 'ring-2 ring-violet-400 ring-offset-2 ring-offset-transparent',
+        current && 'ring-2 ring-brand-400 ring-offset-2 ring-offset-transparent',
         card.ported === false && 'opacity-55',
       )}
       onClick={onPick}

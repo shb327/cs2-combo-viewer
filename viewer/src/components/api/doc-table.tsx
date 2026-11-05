@@ -20,7 +20,7 @@ export function DocTable({ rows, nameLabel, withValues }: DocTableProps) {
           key={row.name}
           className={`grid gap-1.5 border-b border-white/5 px-4 py-3 last:border-b-0 md:gap-4 ${withValues ? 'md:grid-cols-[minmax(170px,1fr)_minmax(140px,0.9fr)_2fr_minmax(110px,0.8fr)]' : 'md:grid-cols-[minmax(220px,1fr)_1.6fr]'}`}
         >
-          <code className="self-start wrap-break-word font-mono text-[12.5px] text-violet-200">{row.name}</code>
+          <code className="self-start wrap-break-word font-mono text-[12.5px] text-brand-200">{row.name}</code>
           {withValues && <span className="break-all font-mono text-[12px] text-foreground/75">{row.values ?? '—'}</span>}
           <span className="text-[13px] leading-relaxed text-foreground/85">{row.description}</span>
           {withValues && <span className="text-[12px] text-muted-foreground"><span className="md:hidden">Default: </span>{row.fallback ?? '—'}</span>}

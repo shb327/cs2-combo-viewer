@@ -13,7 +13,7 @@ interface DialogHeadingProps {
 export function DialogHeading({ icon: Icon, title, description, onClose }: DialogHeadingProps) {
   return (
     <div className="flex shrink-0 items-center gap-3.5 border-b border-white/10 px-5 py-4">
-      <div className="bevel-primary grid size-11 shrink-0 place-items-center rounded-2xl text-white"><Icon className="size-5" /></div>
+      <div className="bevel-primary grid size-11 shrink-0 place-items-center rounded-2xl text-primary-foreground"><Icon className="size-5" /></div>
       <div className="min-w-0 flex-1">
         <DialogTitle className="text-[16px] font-semibold tracking-tight">{title}</DialogTitle>
         <DialogDescription className="text-[12px] text-muted-foreground">{description}</DialogDescription>

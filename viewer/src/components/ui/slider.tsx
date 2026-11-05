@@ -33,7 +33,7 @@ function Slider({
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-gradient-to-r from-violet-500 to-fuchsia-400 select-none data-horizontal:h-full data-vertical:w-full"
+            className="bg-gradient-to-r from-brand-500 to-brand-400 select-none data-horizontal:h-full data-vertical:w-full"
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (

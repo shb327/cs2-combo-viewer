@@ -33,7 +33,7 @@ export function EventLog({ entries, onClear }: { entries: LogEntry[]; onClear: (
               <span className="shrink-0 tabular-nums text-muted-foreground/70">{e.at.toLocaleTimeString([], { hour12: false })}</span>
               <span className={cn('shrink-0', e.dir === 'in' ? 'text-emerald-300' : 'text-sky-300')}>{e.dir === 'in' ? '←' : '→'}</span>
               <span className="min-w-0 break-all">
-                <span className={type === 'cs3d:error' ? 'text-red-300' : 'text-violet-200'}>{type}</span>
+                <span className={type === 'cs3d:error' ? 'text-red-300' : 'text-brand-200'}>{type}</span>
                 {rest && <span className="text-foreground/60"> {rest}</span>}
               </span>
             </div>

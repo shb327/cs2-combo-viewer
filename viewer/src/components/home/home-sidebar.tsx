@@ -30,7 +30,7 @@ export function HomeSidebar({ history, catalog, attachments, agents, onSearch, o
 
       <div className="flex flex-1 flex-col gap-3.5 px-4 py-4 lg:min-h-0 lg:overflow-y-auto">
         <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Start</span>
-        <button type="button" onClick={onSearch} className="bevel-primary flex items-center gap-3 rounded-2xl p-3 text-left text-white">
+        <button type="button" onClick={onSearch} className="bevel-primary flex items-center gap-3 rounded-2xl p-3 text-left text-primary-foreground">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/15"><Search className="size-4.5" /></span>
           <span className="min-w-0 flex-1">
             <span className="block text-[14px] font-semibold">Find an item</span>

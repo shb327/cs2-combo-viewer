@@ -31,7 +31,7 @@ export function MapGallery() {
           <span aria-hidden className="absolute inset-0 bg-linear-to-t from-black/75 via-black/10 to-transparent" />
           <span className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 pb-2.5 text-[13px] font-semibold text-white">
             {m.name}
-            <span className="text-[11px] font-medium text-violet-200 opacity-0 transition-opacity group-hover:opacity-100">View here →</span>
+            <span className="text-[11px] font-medium text-brand-200 opacity-0 transition-opacity group-hover:opacity-100">View here →</span>
           </span>
         </button>
       ))}

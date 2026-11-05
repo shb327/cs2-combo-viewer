@@ -109,7 +109,7 @@ export function Stage({ viewportRef, heading, loading, error, map, onMap, getSha
         {error && <Callout tone="error" pill className="pointer-events-auto">{error}</Callout>}
         {!hideUi && canEdit && editing && (
           <div className="glass flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] text-foreground/85">
-            <span className="size-1.5 animate-pulse rounded-full bg-violet-400" />
+            <span className="size-1.5 animate-pulse rounded-full bg-brand-400" />
             Edit mode · drag a sticker or the charm · drag elsewhere to turn the view
           </div>
         )}

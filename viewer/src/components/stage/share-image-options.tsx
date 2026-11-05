@@ -34,7 +34,7 @@ export function ShareImageOptions({ style, rarityColor, onChange }: ShareImageOp
               title={b.label}
               aria-pressed={style.background === b.id}
               onClick={() => onChange({ background: b.id, ...(b.id === 'transparent' && style.format === 'jpeg' ? { format: 'png' as const } : {}) })}
-              className={cn('flex flex-col items-center gap-1 rounded-xl p-1 text-[10px] font-medium', style.background === b.id ? 'bevel-primary text-white' : 'bevel text-foreground/75')}
+              className={cn('flex flex-col items-center gap-1 rounded-xl p-1 text-[10px] font-medium', style.background === b.id ? 'bevel-primary text-primary-foreground' : 'bevel text-foreground/75')}
             >
               <span className="h-7 w-full rounded-lg ring-1 ring-black/40" style={{ background: swatch(b.id, style, rarityColor) }} />
               {b.label}
