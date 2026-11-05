@@ -197,7 +197,8 @@ export class WeaponComposite {
 
   static async create(renderer: THREE.WebGLRenderer, base: string, inputs: CompositeInputs,
     loadTexture: (path: string, srgb: boolean) => Promise<THREE.Texture>): Promise<WeaponComposite> {
-    const [table, channels] = await Promise.all([loadCompositeTable(base), loadChannels(base)])
+    // The channel table is only read when it is applied (no build writes it yet): no request for a file that isn't there.
+    const [table, channels] = await Promise.all([loadCompositeTable(base), APPLY_CHANNELS ? loadChannels(base) : Promise.resolve({} as Record<string, number>)])
     const load = async (path: string, srgb: boolean) => {
       const n = APPLY_CHANNELS ? channels[path.replace(/^extracted\/game\//, '')] : 0
       const t = await loadTexture(path, n ? false : srgb)
