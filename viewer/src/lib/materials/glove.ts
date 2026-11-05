@@ -3,8 +3,9 @@ import { texXform } from '@/lib/materials/weapon'
 import type { GloveItem } from '@/lib/data/items'
 import type { RandomFloat } from '@/lib/data/rng'
 import { uniformValue, type ExprContext } from '@/lib/materials/composite'
+export { packLayers } from '@/lib/materials/composite'
 import type { Value } from '@/lib/materials/composite-expr'
-import { GLOVE_VS_TYPES, GloveTargets, gloveVertexShader, type GloveProgram } from '@/lib/materials/glove-shared'
+import { GLOVE_VS_TYPES, GloveTargets, gloveVertexShader, vsUniform, type GloveProgram } from '@/lib/materials/glove-shared'
 
 /** A glove paint's material (the kit's vmat): its features, values and textures. */
 export interface Vmat {
@@ -18,56 +19,6 @@ export interface Vmat {
 /** The material's static features (F_*), which pick the compositor's combo. */
 export const vmatFeatures = (vmat: Vmat): Record<string, number> =>
   Object.fromEntries(Object.entries(vmat.ints).filter(([k]) => k.startsWith('F_')))
-
-const COPY_VERT = `
-in vec3 position;
-out vec2 vUv;
-void main() {
-  vUv = position.xy * 0.5 + 0.5;
-  gl_Position = vec4(position.xy, 0.0, 1.0);
-}`
-
-const COPY_FRAG = `
-precision highp float;
-uniform sampler2D uSrc;
-in vec2 vUv;
-out vec4 oColor;
-void main() { oColor = texture(uSrc, vUv); }`
-
-/**
- * WebGL allows 16 textures per pass and the glove compositor uses up to 37, so its per-layer families (1 to 4) go into
- * 4-layer texture arrays (the pipeline rewrites the shader to match), copied on the GPU: a 2D canvas would
- * premultiply the alpha and wipe normals stored with alpha 0.
- */
-export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[]): { texture: THREE.Texture; dispose: () => void } {
-  const { width, height } = layers[0].image as { width: number; height: number }
-  /**
-   * An sRGB family (the shader reads it as sRGB) is stored as sRGB (SRGB8_ALPHA8): the copy writes linear values and the
-   * GPU encodes them, so dark tones keep their precision instead of banding in an 8-bit linear target.
-   */
-  const srgb = layers.some((l) => l.colorSpace === THREE.SRGBColorSpace)
-  const target = new THREE.WebGLArrayRenderTarget(width, height, layers.length, {
-    generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping,
-    colorSpace: srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace,
-  })
-  target.texture.wrapS = target.texture.wrapT = THREE.RepeatWrapping
-  const copy = new THREE.RawShaderMaterial({
-    glslVersion: THREE.GLSL3, vertexShader: COPY_VERT, fragmentShader: COPY_FRAG, depthTest: false, depthWrite: false,
-    uniforms: { uSrc: { value: null } },
-  })
-  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), copy)
-  const camera = new THREE.Camera()
-  const previous = renderer.getRenderTarget()
-  layers.forEach((layer, i) => {
-    copy.uniforms.uSrc.value = layer
-    renderer.setRenderTarget(target, i)
-    renderer.render(quad, camera)
-  })
-  renderer.setRenderTarget(previous)
-  copy.dispose()
-  quad.geometry.dispose()
-  return { texture: target.texture, dispose: () => target.dispose() }
-}
 
 /**
  * A classic glove finish (csgo_customglove without F_BACKWARDS_COMPATIBILITY): the game's compositor, run once per output
@@ -97,7 +48,7 @@ export class GloveFinish {
     }
     for (const [name] of combo.uniforms) uniforms[name] = { value: null }
     for (const name of combo.textures) uniforms[name] = { value: textures[name] ?? null }
-    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[name] ??= { value: null }
+    for (const name of Object.keys(GLOVE_VS_TYPES)) uniforms[vsUniform(name)] = { value: null }
     this.program = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: gloveVertexShader(combo.inputs), fragmentShader: shader.frag, uniforms,
       depthTest: false, depthWrite: false,
@@ -189,12 +140,9 @@ export class GloveFinish {
       // The seed's and the float's values win over the shader's own expressions for them.
       u[name].value = uniformValue(name in this.overrides ? undefined : table.ps[name], name, type, ctx)
     }
-    // The vertex stage's variables share names with the fragment stage's (g_vPatternTexCoordXform0/1): a name the
-    // fragment shader declares keeps its value from above, or the seed's placement would be reset to the default.
-    const fragment = new Set(this.shader.combo.uniforms.map(([name]) => name))
-    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) {
-      if (!fragment.has(name)) u[name].value = uniformValue(table.vs[name], name, type, ctx)
-    }
+    // The vertex stage's own uniforms (vsUniform): some share a name with the fragment stage's
+    // (g_vPatternTexCoordXform0/1), and one shared uniform reset the seed's placement to the vertex table's default.
+    for (const [name, type] of Object.entries(GLOVE_VS_TYPES)) u[vsUniform(name)].value = uniformValue(table.vs[name], name, type, ctx)
     this.targets.render(renderer, this.quad, this.program, this.camera)
   }
 

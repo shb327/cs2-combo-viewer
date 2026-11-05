@@ -11,9 +11,9 @@ const SNIPPET = `<iframe src="${WEB_ORIGIN}/embed?def=7&paint=180&map=de_mirage"
 export function ApiTeaser() {
   return (
     <div className="tile relative grid gap-5 overflow-hidden p-5 lg:grid-cols-[1fr_1.2fr] lg:p-6">
-      <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-60 w-80 rounded-full bg-fuchsia-600/15 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-60 w-80 rounded-full bg-brand-600/15 blur-3xl" />
       <div className="relative flex flex-col gap-3">
-        <span className="bevel-primary grid size-10 place-items-center rounded-xl text-white"><Code2 className="size-5" /></span>
+        <span className="bevel-primary grid size-10 place-items-center rounded-xl text-primary-foreground"><Code2 className="size-5" /></span>
         <h3 className="text-[20px] font-semibold tracking-tight">Put it on your site</h3>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           The viewer embeds with one iframe: pick the item in its URL (an inspect link, def + paint, a skin, sticker, charm or agent), then change

@@ -58,6 +58,9 @@ static class Extract
                     continue;
                 }
                 using var resource = loader.LoadFileCompiled(path) ?? throw new FileNotFoundException("not in the VPK: " + path);
+                // A texture's average colour as the compiler stored it (the compositors' TextureAverageColor reads it).
+                if (kind == "texture" && resource.DataBlock is ValveResourceFormat.ResourceTypes.Texture tex)
+                    entry["reflectivity"] = new JsonArray(tex.Reflectivity.X, tex.Reflectivity.Y, tex.Reflectivity.Z, tex.Reflectivity.W);
                 entry["out"] = kind switch
                 {
                     "texture" => Texture(resource, loader, outPath),

@@ -16,7 +16,7 @@ export function MapButton({ label, thumb, active, onClick }: MapButtonProps) {
       onClick={onClick}
       title={label}
       aria-pressed={active}
-      className={cn('flex flex-col gap-1.5 rounded-2xl p-1.5 text-left text-[12.5px] font-medium', active ? 'bevel-primary text-white' : 'bevel text-foreground/80')}
+      className={cn('flex flex-col gap-1.5 rounded-2xl p-1.5 text-left text-[12.5px] font-medium', active ? 'bevel-primary text-primary-foreground' : 'bevel text-foreground/80')}
     >
       {thumb
         ? <img src={thumb} alt="" loading="lazy" className="aspect-[2/1] w-full rounded-xl object-cover" />

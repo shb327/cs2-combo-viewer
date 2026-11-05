@@ -22,10 +22,10 @@ export function ClipboardOffer({ link, catalog, attachments, agents, onUse }: Cl
   const images = useDbImages()
   const preview = useMemo(() => inspectPreview(decodeInspectLink(link), catalog, attachments, images, agents), [link, catalog, attachments, images, agents])
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-violet-400/30 bg-violet-500/10 p-1.5 pr-2">
+    <div className="flex items-center gap-3 rounded-xl border border-brand-400/30 bg-brand-500/10 p-1.5 pr-2">
       <ItemImage src={preview.image} color={preview.color} className="h-10 w-14 rounded-lg" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] text-violet-200/80">In your clipboard</span>
+        <span className="block text-[11px] text-brand-200/80">In your clipboard</span>
         <span className="block truncate text-[13px] font-medium">{preview.title}</span>
       </span>
       <Button size="sm" onClick={onUse}><ClipboardPaste /> Use it</Button>

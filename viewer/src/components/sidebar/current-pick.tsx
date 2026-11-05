@@ -24,7 +24,7 @@ export function CurrentPick({ over, title, color, onClick }: CurrentPickProps) {
         <span className="block truncate text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{over}</span>
         <span className="block truncate text-[14px] font-semibold">{title}</span>
       </span>
-      <span className="bevel-primary relative flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-white">
+      <span className="bevel-primary relative flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-primary-foreground">
         <LayoutGrid className="size-3.5" /> Change <Kbd className="ml-0.5 hidden sm:inline-flex">{MOD_KEY} K</Kbd>
       </span>
     </button>

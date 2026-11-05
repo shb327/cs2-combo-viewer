@@ -7,6 +7,14 @@ export const imagePath = (path: string): string => path.replace(/\.png$/i, '.web
 /** Loads textures relative to an asset base, with the glTF UV convention (no vertical flip). */
 export class TextureSource {
   private readonly loader = new THREE.TextureLoader().setCrossOrigin('anonymous')
+  /**
+   * Images decoded off the main thread as each one arrives (an <img> is decoded when it is first drawn: for a combo's
+   * forty-odd textures, seconds on the main thread after the last byte). Stored as they are: no premultiplied alpha
+   * (normals and masks keep their RGB under zero alpha), no colour conversion, no flip (the glTF convention).
+   */
+  private readonly bitmaps = typeof createImageBitmap === 'function'
+    ? new THREE.ImageBitmapLoader().setCrossOrigin('anonymous').setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+    : null
   private readonly anisotropy: number
   /** 1×1 white, for optional inputs an item doesn't have. */
   readonly blank: THREE.DataTexture
@@ -25,14 +33,35 @@ export class TextureSource {
   async load(path: string, srgb: boolean): Promise<THREE.Texture> {
     const url = this.url(path)
     /** The .webp, else the .png (not converted yet). */
-    const t = await this.loader.loadAsync(this.url(imagePath(path)))
-      .catch(() => this.loader.loadAsync(url))
+    const t = await this.image(this.url(imagePath(path)))
+      .catch(() => this.image(url))
       .catch(() => { throw new Error('Missing ' + url) })
     t.flipY = false
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.anisotropy = this.anisotropy
     return t
+  }
+
+  /**
+   * Decoded images by URL, kept for half a minute after they arrive: a knife's finish and its composite ask for the
+   * same files, the composite a little later (after its shader). Enough for one item's load, then let go.
+   */
+  private readonly decoding = new Map<string, Promise<ImageBitmap>>()
+
+  private async image(url: string): Promise<THREE.Texture> {
+    if (!this.bitmaps) return this.loader.loadAsync(url)
+    let bitmap = this.decoding.get(url)
+    if (!bitmap) {
+      bitmap = this.bitmaps.loadAsync(url)
+      this.decoding.set(url, bitmap)
+      const forget = () => { this.decoding.delete(url) }
+      bitmap.then(() => setTimeout(forget, 30000), forget)
+    }
+    // Each caller its own texture (the colour space differs per use); they share the decoded image.
+    const texture = new THREE.Texture(await bitmap)
+    texture.needsUpdate = true
+    return texture
   }
 
   optional(path: string | undefined, srgb: boolean): Promise<THREE.Texture> {

@@ -27,3 +27,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Montserrat
+
+`public/fonts/montserrat/`: the Montserrat variable font (latin and latin-ext, WOFF2, as Google Fonts serves it).
+Copyright 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git). Licensed under the
+SIL Open Font License, Version 1.1: see `public/fonts/montserrat/OFL.txt`.

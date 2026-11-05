@@ -16,7 +16,7 @@ interface PetSectionProps {
   onClip: (name: string | null) => void
 }
 
-const chip = (on: boolean) => cn('rounded-lg px-2.5 py-1 text-[12px] font-medium', on ? 'bevel-primary text-white' : 'bevel text-foreground/80')
+const chip = (on: boolean) => cn('rounded-lg px-2.5 py-1 text-[12px] font-medium', on ? 'bevel-primary text-primary-foreground' : 'bevel text-foreground/80')
 
 /** A pet's colours (one per material of its model) and the animation it plays: folders that fold, and a search over them. */
 export function PetSection({ pet, pets, variant, clip, onVariant, onClip }: PetSectionProps) {

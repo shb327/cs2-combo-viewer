@@ -95,13 +95,20 @@ export class ModelLoader {
     const agent = agents.models[entry.model]
     if (!agent.glb) throw new Error('No first-person arms for ' + entry.name)
     const root = new THREE.Group()
-    root.add(await this.agentArms(agent, parts, !glove, patchLayers))
-    if (glove) {
-      /** The arm's skin: the bare_arm call (its order next to the default glove's varies by agent). */
-      const armCalls = agent.drawCalls.firstperson_default_gloves_arms ?? []
-      const armCall = armCalls.find((c) => /bare_arm/.test(c.material)) ?? armCalls[0]
-      const geometries: SkinnedGeometry[] = []
-      root.add(await this.gloves(glove, { parts: geometries, armCall, arms: { model: glove.model, drawCalls: glove.drawCalls ?? {} } }))
+    /** The agent's arms and the gloves load together; the parts keep their order (the agent's first). */
+    const agentParts: RigPart[] = []
+    const geometries: SkinnedGeometry[] = []
+    const armCalls = agent.drawCalls.firstperson_default_gloves_arms ?? []
+    /** The arm's skin: the bare_arm call (its order next to the default glove's varies by agent). */
+    const armCall = armCalls.find((c) => /bare_arm/.test(c.material)) ?? armCalls[0]
+    const [agentRoot, gloveRoot] = await Promise.all([
+      this.agentArms(agent, agentParts, !glove, patchLayers),
+      glove ? this.gloves(glove, { parts: geometries, armCall, arms: { model: glove.model, drawCalls: glove.drawCalls ?? {} } }) : null,
+    ])
+    root.add(agentRoot)
+    parts.push(...agentParts)
+    if (glove && gloveRoot) {
+      root.add(gloveRoot)
       /** The glove models share the twist bones (forearm roll) with the agent's sleeves, so they take the same constraints. */
       parts.push({ skeleton: { ...adoptAncestors(arms!, agent.skeleton), twists: agent.skeleton.twists }, geometries })
     }
@@ -194,6 +201,14 @@ export class ModelLoader {
     const masksPath = 'masks' in item ? item.masks : undefined
     const posPath = 'pos' in item ? item.pos : undefined
     const surfacePath = 'surface' in item ? item.surface : undefined
+    /** The composite (its shader and pass textures) loads alongside the finish's own textures. */
+    const compositeLoad = item.style === 'composite'
+      ? WeaponComposite.create(this.renderer, this.opts.assetBase, item.composite, (path, srgb) => (path.endsWith('.exr') ? t.exr(path) : t.load(path, srgb)))
+      : Promise.resolve(null)
+    compositeLoad.catch(() => {})
+    const glitterPath = item.style === 'composite' ? item.composite.materialTextures?.g_tGlitterNormal : undefined
+    const glitterLoad = glitterPath ? t.load(glitterPath, false) : Promise.resolve(null)
+    glitterLoad.catch(() => {})
     const [paint, wear, grunge, base, normal, orm, rough, ao, masks, pos, surface] = await Promise.all([
       paintPath ? t.load(paintPath, ['custom', 'gunsmith', 'patina'].includes(item.style)) : t.blank,
       t.load(item.wearTexture ?? SHARED.wear, false), t.load(item.grungeTexture ?? SHARED.grunge, true),
@@ -203,11 +218,8 @@ export class ModelLoader {
       posPath ? t.exr(posPath) : t.blank,
       surfacePath ? t.load(surfacePath, false) : t.blank,
     ])
-    const composite = item.style === 'composite'
-      ? await WeaponComposite.create(this.renderer, this.opts.assetBase, item.composite, (path, srgb) => (path.endsWith('.exr') ? t.exr(path) : t.load(path, srgb)))
-      : null
-    const glitterPath = item.style === 'composite' ? item.composite.materialTextures?.g_tGlitterNormal : undefined
-    const glitterNormal = glitterPath ? await t.load(glitterPath, false) : null
+    const composite = await compositeLoad
+    const glitterNormal = await glitterLoad
     return new WeaponFinish(item, {
       paint, wear, grunge, base, ao, masks, pos, surface,
       normal: item.normal ? normal : null, orm: item.orm ? orm : null, rough: item.rough ? rough : null,
@@ -239,6 +251,9 @@ export class ModelLoader {
 
   async weapon(item: WeaponItem): Promise<THREE.Object3D> {
     const t = this.textures
+    /** The model downloads while the finish's textures do (it doesn't depend on them). */
+    const model = this.gltf.loadAsync(t.url(this.opts.modelOverride ?? item.model))
+    model.catch(() => {})
     const finish = await this.weaponFinish(item)
     this.sink.finishes.push(finish)
     const partFinishes: Record<string, WeaponFinish> = {}
@@ -247,7 +262,7 @@ export class ModelLoader {
       partFinishes[material] = await this.weaponFinish(part as WeaponItem)
       this.sink.finishes.push(partFinishes[material])
     }
-    const root = (await this.gltf.loadAsync(t.url(this.opts.modelOverride ?? item.model))).scene
+    const root = (await model).scene
     const hide = (item.mesh ?? 'body_legacy') === 'body_hd' ? /body_legacy/ : /body_hd/
     if (item.drawCalls) nameDrawCalls(root, item.drawCalls)
     root.traverse((o) => {
@@ -277,6 +292,11 @@ export class ModelLoader {
     const group = new RegExp(fp?.group ?? 'viewmodel')
     const t = this.textures
     const src = item ?? fp!.arms
+    /** The model downloads while the finish's textures do. */
+    const model = this.gltf.loadAsync(t.url(src.model))
+    model.catch(() => {})
+    /** The arm's skin material, made now so its textures load with the gloves' (one for every arm piece). */
+    const armMaterial = fp?.armCall ? this.plainMaterial(fp.armCall) : null
     const vmat = !item ? null : typeof item.vmat === 'string' ? await (await fetch(t.url(item.vmat))).json() as Vmat : item.vmat
     /** Classic gloves: the game's compositor combo for the paint's features. */
     const classic = item && !item.v2 && vmat ? await loadGloveProgram(this.opts.assetBase, vmatFeatures(vmat)) : null
@@ -292,7 +312,7 @@ export class ModelLoader {
         this.sink.disposables.push(packed.dispose)
       }
     }
-    const scene = (await this.gltf.loadAsync(t.url(src.model))).scene
+    const scene = (await model).scene
     if (src.drawCalls) nameDrawCalls(scene, src.drawCalls)
     scene.updateMatrixWorld(true)
     const pieces: { material: 'left' | 'right' | 'arm'; geometry: THREE.BufferGeometry; call?: DrawCall }[] = []
@@ -328,7 +348,7 @@ export class ModelLoader {
           if (!g) continue
           fp.parts.push(new SkinnedGeometry(g))
           const armCall = fp.armCall ?? piece.call
-          const mat = piece.material === 'arm' ? armCall ? this.plainMaterial(armCall) : arm : finishFor(piece.material).material
+          const mat = piece.material === 'arm' ? armCall ? (armCall === fp.armCall && armMaterial ? armMaterial : this.plainMaterial(armCall)) : arm : finishFor(piece.material).material
           root.add(new THREE.Mesh(g, mat))
         }
       }

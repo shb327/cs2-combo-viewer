@@ -17,7 +17,7 @@ export function SegmentedControl<T extends string | number>({ options, value, on
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={cn('flex-1 rounded-xl px-2.5 py-1.5 text-[12px] font-medium', o.value === value ? 'bevel-primary text-white' : 'bevel text-foreground/80')}
+          className={cn('flex-1 rounded-xl px-2.5 py-1.5 text-[12px] font-medium', o.value === value ? 'bevel-primary text-primary-foreground' : 'bevel text-foreground/80')}
         >
           {o.label}
         </button>

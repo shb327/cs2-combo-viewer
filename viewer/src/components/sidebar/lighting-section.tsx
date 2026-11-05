@@ -38,7 +38,7 @@ export function LightingSection({ lighting, presetId, onChange }: LightingSectio
               onClick={() => onChange({ ...p.lighting, map: lighting.map })}
               className={cn(
                 'flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[10.5px] font-medium',
-                presetId === p.id ? 'bevel-primary text-white' : 'bevel text-foreground/80',
+                presetId === p.id ? 'bevel-primary text-primary-foreground' : 'bevel text-foreground/80',
               )}
             >
               <span className="flex">

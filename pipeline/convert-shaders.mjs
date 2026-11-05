@@ -8,7 +8,7 @@
 //
 // The output is derived from the game's shaders: it stays in the local asset folder and is never committed.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { insideRoot, EXTRACTED, parseArgs } from './lib/paths.mjs'
 
@@ -28,6 +28,13 @@ const SHADERS = [
 
 /** WebGL2 allows 16 textures in a fragment shader. */
 const MAX_TEXTURES = 16
+
+/**
+ * Textures that can share a 2-layer array when a combo needs more than 16 after packing the 1–4 families: both linear,
+ * one channel read, the same sampler and coordinates. The weapon combos with every option on (gunsmith with case
+ * hardening, overlay, pearlescence, metalness and roughness textures) sample 17.
+ */
+const PAIRS = { g_tPaintMetalnessRoughness: ['g_tPaintMetalness', 'g_tPaintRoughness'] }
 
 const args = parseArgs(process.argv.slice(2))
 const raw = insideRoot(EXTRACTED, args.raw ?? path.join(EXTRACTED, 'shaders-raw'))
@@ -59,7 +66,7 @@ for (const def of SHADERS) {
     }
     result.sets.forEach((s) => allSets.add(s))
     // The combo's info rides on its shader's first line: a combo is one request, not a table of all 1144.
-    const info = { values, uniforms: result.uniforms, textures: result.textures, inputs: result.inputs, sets: result.sets }
+    const info = { values, uniforms: result.uniforms, textures: result.textures, inputs: result.inputs, sets: result.sets, ...(result.packs && { packs: result.packs }) }
     writeFileSync(path.join(out, `${def.prefix}_${id}.frag.glsl`), `// combo ${JSON.stringify(info)}\n${result.glsl}`)
     converted++
   }
@@ -73,7 +80,7 @@ for (const def of SHADERS) {
     for (const msg of skipped) { const r = msg.replace(/^.*?combo \d+: /, ''); reasons.set(r, (reasons.get(r) ?? 0) + 1) }
     for (const [r, n] of reasons) console.log(`    ${n} × ${r}`)
     writeFileSync(path.join(out, `${def.name}.skipped.txt`), skipped.join('\n') + '\n')
-  }
+  } else rmSync(path.join(out, `${def.name}.skipped.txt`), { force: true })
 }
 
 /** The table's variables as the viewer reads them (ShaderVar in composite.ts). */
@@ -124,12 +131,21 @@ function convert(src, def, label) {
   const textures = [...s.matchAll(/^layout\([^)]*\) uniform texture2D (\w+);\n/gm)].map((m) => m[1])
   if (/uniform texture(?!2D\b)\w+ /.test(s)) throw new Error(`${label}: a texture type other than texture2D`)
   const sets = textures.length > MAX_TEXTURES ? layerFamilies(textures) : []
-  const packed = new Set(sets.flatMap((f) => [1, 2, 3, 4].map((i) => f + i)))
+  /** Each packed texture → [its array, its layer]. */
+  const layerOf = new Map(sets.flatMap((f) => [1, 2, 3, 4].map((i) => [f + i, [f, i - 1]])))
+  let packs = null
+  const unpacked = () => textures.filter((t) => !layerOf.has(t)).length + sets.length + Object.keys(packs ?? {}).length
+  for (const [name, pair] of Object.entries(PAIRS)) {
+    if (unpacked() <= MAX_TEXTURES || !pair.every((t) => textures.includes(t) && !layerOf.has(t))) continue
+    packs = { ...packs, [name]: pair }
+    pair.forEach((t, i) => layerOf.set(t, [name, i]))
+  }
   s = s.replace(/^layout\([^)]*\) uniform sampler \w+;\n/gm, '')
-  s = s.replace(/^layout\([^)]*\) uniform texture2D (\w+);\n/gm, (_, name) => (packed.has(name) ? '' : `uniform highp sampler2D ${name};\n`))
-  s = rewriteSamplers(s, packed, label)
-  const remaining = textures.filter((t) => !packed.has(t))
-  if (remaining.length + sets.length > MAX_TEXTURES) throw new Error(`${label}: ${remaining.length + sets.length} textures after packing`)
+  s = s.replace(/^layout\([^)]*\) uniform texture2D (\w+);\n/gm, (_, name) => (layerOf.has(name) ? '' : `uniform highp sampler2D ${name};\n`))
+  s = rewriteSamplers(s, layerOf, label)
+  const remaining = textures.filter((t) => !layerOf.has(t))
+  const arrays = [...sets, ...Object.keys(packs ?? {})]
+  if (remaining.length + arrays.length > MAX_TEXTURES) throw new Error(`${label}: ${remaining.length + arrays.length} textures after packing`)
 
   // Inputs → the viewer's vertex shader outputs, by location.
   const inputs = {}
@@ -144,13 +160,15 @@ function convert(src, def, label) {
   for (const [loc, name] of Object.entries(inputs)) s = s.replace(new RegExp(`\\binput_${loc}\\b`, 'g'), name)
   if (/^layout\(location = [1-9]\d*\) out /m.test(s)) throw new Error(`${label}: more than one output`)
 
+  s = flattenArrays(s, label)
+
   const head = [
     'precision highp float;',
     'precision highp int;',
     'precision highp sampler2D;',
-    ...(sets.length ? ['precision highp sampler2DArray;'] : []),
+    ...(arrays.length ? ['precision highp sampler2DArray;'] : []),
     ...uniforms.map(([name, type]) => `uniform ${type} ${name};`),
-    ...sets.map((f) => `uniform highp sampler2DArray ${f};`),
+    ...arrays.map((f) => `uniform highp sampler2DArray ${f};`),
     // HLSL's saturate, which the decompiled code calls.
     ...['float', 'vec2', 'vec3', 'vec4'].map((t) => `${t} saturate(${t} x) { return clamp(x, 0.0, 1.0); }`),
   ].join('\n')
@@ -158,7 +176,42 @@ function convert(src, def, label) {
   for (const bad of ['texture2D ', 'sampler2D(', '_Globals_', '#extension', 'Fine(']) {
     if (glsl.includes(bad)) throw new Error(`${label}: "${bad}" left after conversion`)
   }
-  return { glsl, uniforms, textures: [...remaining, ...sets], inputs, sets }
+  return { glsl, uniforms, textures: [...remaining, ...arrays], inputs, sets, packs }
+}
+
+/**
+ * Arrays of arrays (GLSL ES 3.10; WebGL2 has 3.00) → flat arrays: `int a[8][9];` → `int a[72];`, `a[i][j]` → `a[(i) * 9 + (j)]`.
+ * The glove compositor's tint-ID filter (combos with F_TINT_ID) keeps a 3×3 neighbourhood per ID this way.
+ */
+function flattenArrays(s, label) {
+  for (const m of [...s.matchAll(/\b(\w+) (\w+)\[(\d+)\]\[(\d+)\];/g)]) {
+    const [whole, type, name, rows, cols] = m
+    const declaration = `${type} ${name}[${rows * cols}];`
+    s = s.replace(whole, '@@DECLARATION@@')
+    let out = ''
+    let i = 0
+    const re = new RegExp(`\\b${name}\\[`, 'g')
+    let use
+    while ((use = re.exec(s))) {
+      const index = (from) => {
+        let depth = 0, j = from
+        for (; j < s.length; j++) {
+          if (s[j] === '[') depth++
+          else if (s[j] === ']') { if (depth === 0) break; depth-- }
+        }
+        return [s.slice(from, j), j + 1]
+      }
+      const [a, afterA] = index(use.index + name.length + 1)
+      if (s[afterA] !== '[') throw new Error(`${label}: ${name} indexed once`)
+      const [b, afterB] = index(afterA + 1)
+      out += s.slice(i, use.index) + `${name}[(${a}) * ${cols} + (${b})]`
+      i = afterB
+      re.lastIndex = afterB
+    }
+    s = (out + s.slice(i)).replace('@@DECLARATION@@', declaration)
+  }
+  if (/\b\w+ \w+\[\d+\]\[\d+\]/.test(s)) throw new Error(`${label}: an array of arrays left`)
+  return s
 }
 
 /** Texture names that come as a complete 1–4 family (g_tDetail1 … g_tDetail4 → g_tDetail). */
@@ -174,15 +227,16 @@ function layerFamilies(names) {
 
 /**
  * sampler2D(tex, sampler) → tex; for a packed layer, f(sampler2D(g_tDetail2, s), uv, …) → f(g_tDetail, vec3(uv, 1.0), …).
+ * @param layerOf each packed texture → [its array, its layer]
  */
-function rewriteSamplers(s, packed, label) {
+function rewriteSamplers(s, layerOf, label) {
   let out = ''
   let i = 0
   const re = /sampler2D\((\w+), \w+\)/g
   let m
   while ((m = re.exec(s))) {
     const [whole, tex] = m
-    if (!packed.has(tex)) {
+    if (!layerOf.has(tex)) {
       out += s.slice(i, m.index) + tex
       i = m.index + whole.length
       continue
@@ -193,8 +247,7 @@ function rewriteSamplers(s, packed, label) {
     if (!call || !/^(texture|textureLod|textureGrad|textureSize|texelFetch)$/.test(call[1])) {
       throw new Error(`${label}: packed texture ${tex} used outside a texture call (${call?.[1] ?? '?'})`)
     }
-    const family = tex.slice(0, -1)
-    const layer = Number(tex.slice(-1)) - 1
+    const [family, layer] = layerOf.get(tex)
     let j = m.index + whole.length
     if (call[1] === 'textureSize') {
       out += before + family

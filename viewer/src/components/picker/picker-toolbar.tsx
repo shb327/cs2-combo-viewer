@@ -39,7 +39,7 @@ export function PickerToolbar({ query, placeholder, stickerKind, portedOnly, onQ
           }}
           placeholder={placeholder}
           spellCheck={false}
-          className="inset-well h-11 w-full rounded-2xl pl-10 pr-10 text-[14px] outline-none transition placeholder:text-muted-foreground focus:border-violet-400/60 focus:ring-4 focus:ring-violet-500/15"
+          className="inset-well h-11 w-full rounded-2xl pl-10 pr-10 text-[14px] outline-none transition placeholder:text-muted-foreground focus:border-brand-400/60 focus:ring-4 focus:ring-brand-500/15"
         />
         {query && (
           <button type="button" aria-label="Clear search" onClick={() => onQuery('')} className="absolute right-3 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition hover:bg-white/10 hover:text-foreground">

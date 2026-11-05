@@ -46,6 +46,8 @@ interface SidebarProps {
   state: ViewerStateApi
   glovesName: string | null
   agentName: string | null
+  /** The default agent's name. */
+  defaultAgentName: string
   /** On an agent's page: the loadout weapon it holds (loaded) and its name; opening it in first person. */
   loadoutWeapon: Item | null
   loadoutWeaponName: string | null
@@ -60,7 +62,7 @@ interface SidebarProps {
 }
 
 /** The control panel, floating over the page: the selection, then the sections that apply to it. On wide screens it folds into a slim rail. */
-export function Sidebar({ lighting, lightingPreset, onLighting, viewmodel, onViewmodel, collapsed, onToggleCollapsed, selection, heading, item, attachments, patches, pets, state, glovesName, agentName, loadoutWeapon, loadoutWeaponName, onLoadoutFirstPerson, activeSticker, onActiveSticker, onOpenPicker, loading, sheetOpen, onCloseSheet }: SidebarProps) {
+export function Sidebar({ lighting, lightingPreset, onLighting, viewmodel, onViewmodel, collapsed, onToggleCollapsed, selection, heading, item, attachments, patches, pets, state, glovesName, agentName, defaultAgentName, loadoutWeapon, loadoutWeaponName, onLoadoutFirstPerson, activeSticker, onActiveSticker, onOpenPicker, loading, sheetOpen, onCloseSheet }: SidebarProps) {
   const isSkin = selection.kind === 'skin'
   /** On a phone the panel is a sheet over half the screen, opened by the stage's button. */
   /** On a phone a skin's sections are split into tabs, so the sheet stays short; wide screens show them all. */
@@ -164,6 +166,7 @@ export function Sidebar({ lighting, lightingPreset, onLighting, viewmodel, onVie
           <div className={only('view')}>
           <FirstPersonSection
             agentName={agentName}
+            defaultAgentName={defaultAgentName}
             glovesName={glovesName}
             viewmodel={viewmodel}
             onViewmodel={onViewmodel}

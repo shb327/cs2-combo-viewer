@@ -8,12 +8,13 @@ What the viewer (`viewer/`) loads, and in what shape, worked out from its loadin
     index.json               catalog: items and skins
     items/<item>.json        one per knife / gloves
     kits/<kit>.json          one per paint kit
+    texture_average.json     { [texture file]: [r, g, b, a] }: the vtex Reflectivity of the newer gloves' textures (TextureAverageColor)
     agents.json              agents and their models
     firstperson/             poses, skeletons, clips
     shaders/                 the game's compositing shaders, converted (customweapon.json, cw_<id>.frag.glsl, customglove.json, cg_<id>.frag.glsl)
     maps.json, scenes.json   inspect maps (optional; Vertigo is the default)
     maps/, backgrounds/      their environments and backgrounds
-    stickers.json, charms.json, pins.json, patches.json, pets.json, pets/anim_index.json   out of scope: empty stand-ins
+    stickers.json, charms.json, pins.json, patches.json, pets.json, pets/anim_index.json, agent_patches.json   out of scope: empty stand-ins
   extracted/game/            decoded game files at their game paths (GAME_ROOT)
     <model>.glb
     <texture>.png | .exr
@@ -71,7 +72,8 @@ DrawCall {
   params: { [var]: number | number[] },     // the paint material's values and the loose variables' defaults
   textures: { [var]: path },
   rolls: { var, min?: number[], max?: number[], fixed? }[],   // the seed's rolls, in the game's order
-  rollGroups?, passes?: { [target]: KitLayer[] }, materialLayers?: KitLayer[], compositor? }
+  rollGroups?: { seed, vars: string[], when: { container, var, value, not }[] }[],
+  passes?: { [target]: KitLayer[] }, materialLayers?: KitLayer[], compositor? }
 
 KitLayer = { params, textures }                 // values
          | { container: 'composite_inputs' | 'target' }   // the item's own containers, resolved at runtime
@@ -85,7 +87,7 @@ Which path a kit takes:
 | `csgo_customweapon.vfx` with `passes.g_tColor` and `passes.g_tMetalness`, and a `composite` on the item's draw call | the game's weapon compositor (`lib/materials/composite.ts`) | `shaders/customweapon.json`, `shaders/cw_<combo>.frag.glsl` |
 | `csgo_customweapon.vfx` without passes | the hand-ported paint styles (`lib/materials/weapon.ts`) | pattern, masks, position, surface per style |
 | `csgo_customglove.vfx`, no `compositor` (classic: Crimson Kimono) | the game's glove compositor, combo from the paint's features (0, or 2 with anisotropic gloss) | `shaders/customglove.json`, `shaders/cg_<combo>.frag.glsl` |
-| `csgo_customglove.vfx` with `compositor` and `passes.g_tColor` (newer gloves) | the same compositor, combo 7 | the same files |
+| `csgo_customglove.vfx` with `compositor` and `passes.g_tColor` (newer gloves, `gloves/paints/volatile_02/`) | the same compositor, combo 7 (3 without `F_TINT_ID`), its pass from the compositor template and the paint (a loose resource-material variable in the vcompmat) | the same files, `texture_average.json` |
 
 The passes and layers mirror the kit's `.vcompmat` (and the `_shared_paint_generic.vcompmat` it includes): each `GENERATE_TEXTURE` mutator becomes a pass starting from its initial container, `COPY_MATCHING_KEYS` / `COPY_PROPERTY` / `SET_VALUE` become layers, and the `RANDOM_ROLL_INPUT_VARIABLES` mutator gives `rolls`.
 
@@ -100,13 +102,15 @@ Built by `pipeline/shader-dump` and `pipeline/convert-shaders.mjs`; derived from
 Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by lib/materials/composite-expr.ts
 
 // the first line of each cw_<id>.frag.glsl / cg_<id>.frag.glsl: the combo's info
-// combo { values, uniforms: [name, glslType][], textures: string[], inputs: { [location]: varying }, sets: string[] }
+// combo { values, uniforms: [name, glslType][], textures: string[], inputs: { [location]: varying }, sets: string[], packs?: { [array]: string[] } }
 ```
 
 - A combo's info rides on its shader's first line (`lib/materials/composite.ts`, `loadCombo`): a combo costs one
   request, and the weapon table is 44 KB instead of 1.5 MB with all 1144 combos. A table with `combos` (the older
   format) still loads.
 
+- `packs`: textures the converter pairs into one array to stay under 16 (`g_tPaintMetalnessRoughness`: the paint's
+  metalness and roughness, in the 8 weapon combos that would sample 17). Arrays of arrays (GLSL ES 3.10) are flattened.
 - Combo id: mixed radix over `static`, 9 values for `S_PAINT_STYLE`, 2 for every other (the game's own numbering).
 - Fragment shaders: GLSL ES 3.00 without `#version`, plain `uniform` declarations, one output, inputs named as `combo.inputs` (the vertex shaders are rebuilt in the viewer's code). Layer families of 4 textures (glove detail, grunge, damage…) are packed into `sampler2DArray`s to stay under WebGL's 16 textures.
 - The glove compositor runs once per output mode (albedo, normal, metalness, AO) and is resolved into the material's maps (`lib/materials/glove-shared.ts`).
@@ -133,7 +137,8 @@ First person uses the mesh groups `firstperson_sleeves` (always) and `firstperso
 | `arms.json`, `arms_models.json` | yes / optional | `ArmsSkeleton` of the glove models (`{ [vmdl]: … }` for models with their own bone order) |
 | `idle_index.json` + `idle/*` | optional | keyed by pose file; `InspectClip` looped |
 | `inspect_index.json` + `inspect/*` | optional | `{ [item]: file }`; `InspectClip = { clip, duration, frames, viewmodel: { bones, parents, tracks: [translations, rotations][] }, weapon? }` (one value, or one per frame; `weapon` as `viewmodel` plus `skeleton`, the knife's track) |
-| `weapon_binds.json`, `weapon_skeletons.json`, `attack_index.json` | optional | `{ [item]: [t, q] }`: the model-space bind of the bone the knife hangs from (`weapon_offset`); `{ [glb path]: ArmsSkeleton }`: the knife model's skeleton, to pose it on its track; attack clips (not built yet) |
+| `weapon_binds.json`, `weapon_skeletons.json`, `attack_index.json` | optional | `{ [item]: [t, q] }`: the model-space bind of the bone the knife hangs from (`weapon_offset`); `{ [glb path]: ArmsSkeleton }`: the knife model's skeleton, to pose it on its track; attack clips (not built yet: `{}`) |
+| `inspect/gloves_deploy.json`, `inspect/gloves_anim.json` | optional | the glove inspect, fetched only when `inspect_index.json` lists `gloves_deploy` and `gloves_anim` (not built yet) |
 
 `ArmsSkeleton = { bones, parents /* -1 root, parents first */, pos: number[3][], rot: number[4][] /* parent space, Source inches */, twists? }`.
 

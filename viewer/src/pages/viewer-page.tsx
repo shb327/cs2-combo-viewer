@@ -25,6 +25,7 @@ import { useSkinLoader } from '@/hooks/use-skin-loader'
 import { useViewer } from '@/hooks/use-viewer'
 import { useViewerState } from '@/hooks/use-viewer-state'
 import { useViewerSync, type ViewOptions } from '@/hooks/use-viewer-sync'
+import { DEFAULT_AGENT } from '@/lib/data/agents'
 import { headingFor } from '@/lib/heading'
 import { skinDisplayName } from '@/lib/picker'
 import { selectionPath, type Selection } from '@/lib/selection'
@@ -124,6 +125,7 @@ export function ViewerPage({ selection }: ViewerPageProps) {
           state={state}
           glovesName={glovesName}
           agentName={state.agent ? agents?.agent.get(state.agent)?.name ?? state.agent : null}
+          defaultAgentName={agents?.agent.get(DEFAULT_AGENT)?.name ?? 'Default agent'}
           loadoutWeapon={heldWeapon}
           loadoutWeaponName={loadout.weaponName}
           onLoadoutFirstPerson={loadout.openFirstPerson}

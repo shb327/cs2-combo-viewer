@@ -76,7 +76,7 @@ export class MapStage {
 
   /** Puts an inspect map around the model, or back to the studio with null. */
   async load(id: string | null): Promise<void> {
-    const { scene, renderer, container } = this.host
+    const { scene, renderer } = this.host
     const token = ++this.token
     /** The first map of the session appears without the veil only when there was nothing to hide. */
     const veiled = this.map !== null || id !== null
@@ -92,11 +92,18 @@ export class MapStage {
       return
     }
     const dataBase = this.host.dataBase
+    const backgroundLoad = loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size))
+    /**
+     * The first map of the page: its background (a small image) goes up as soon as it has loaded, without the veil, so
+     * the visitor sees the map while the environment (a larger file), the lights and the model still load.
+     */
+    const early = this.map === null ? backgroundLoad.then((v) => (token === this.token && v ? this.showEarly(v) : null)) : null
     const [, texture, video, scenes] = await Promise.all([
-      this.veil.cover(),
+      early ? Promise.resolve() : this.veil.cover(),
       loadPanorama(dataBase + 'maps/' + id),
-      loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size)),
+      backgroundLoad,
       loadScenes(dataBase),
+      early,
     ])
     const sceneData = scenes.get(id)
     const scene3d = texture && video && sceneData ? await InspectScene.load(this.host.gltf, dataBase, sceneData, true).catch(() => null) : null
@@ -121,11 +128,7 @@ export class MapStage {
      * already graded, so it skips the tone curve; the 3D scene only lends its lights.
      */
     scene.background = null
-    const canvas = renderer.domElement
-    if (getComputedStyle(container).position === 'static') container.style.position = 'relative'
-    canvas.style.position = 'relative'
-    container.insertBefore(video, canvas)
-    if (video instanceof HTMLVideoElement) void video.play().catch(() => {})
+    if (!video.isConnected) this.insertBackground(video)
     if (scene3d) scene.add(scene3d.lights, scene3d.sceneLights)
     if (scene3d?.data.post) {
       this.post = new PostPipeline(renderer, scene3d.data.post, () => this.draw())
@@ -135,7 +138,27 @@ export class MapStage {
     scene.backgroundIntensity = scene3d?.data.exposure ?? 1
     this.place()
     this.host.onChange()
-    this.veil.reveal(video)
+    if (!early) this.veil.reveal(video)
+  }
+
+  /** Puts a background behind the canvas. */
+  private insertBackground(video: HTMLVideoElement | HTMLImageElement): void {
+    const { renderer, container } = this.host
+    const canvas = renderer.domElement
+    if (getComputedStyle(container).position === 'static') container.style.position = 'relative'
+    canvas.style.position = 'relative'
+    container.insertBefore(video, canvas)
+    if (video instanceof HTMLVideoElement) void video.play().catch(() => {})
+  }
+
+  /** The first map's background, faded in on its own before the rest of the map has loaded. */
+  private showEarly(video: HTMLVideoElement | HTMLImageElement): void {
+    video.style.opacity = '0'
+    video.style.transition = 'opacity 250ms ease-out'
+    this.insertBackground(video)
+    this.host.scene.background = null
+    this.host.onChange()
+    requestAnimationFrame(() => { video.style.opacity = '1' })
   }
 
   /**

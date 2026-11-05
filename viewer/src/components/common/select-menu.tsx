@@ -67,7 +67,7 @@ export function SelectMenu<T extends string>({ label, icon: Icon, options, value
               onClick={() => choose(o.value)}
               className={cn('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px]', i === hover ? 'bg-white/10 text-foreground' : 'text-foreground/80')}
             >
-              <Check className={cn('size-3.5', o.value === value ? 'text-violet-300' : 'opacity-0')} />
+              <Check className={cn('size-3.5', o.value === value ? 'text-brand-300' : 'opacity-0')} />
               {o.label}
             </button>
           ))}

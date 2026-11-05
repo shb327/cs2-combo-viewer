@@ -12,6 +12,8 @@ import { clampSeed, wearOf } from '@/lib/wear'
 interface FirstPersonSectionProps {
   /** The chosen agent's name, or null for the default agent. */
   agentName: string | null
+  /** The default agent's name, shown when none is chosen. */
+  defaultAgentName: string
   glovesName: string | null
   viewmodel: Viewmodel
   onViewmodel: (changes: Partial<Viewmodel>) => void
@@ -22,7 +24,7 @@ interface FirstPersonSectionProps {
 }
 
 /** First person: the agent (whose arms and sleeves), the gloves (which, their float and pattern) and the viewmodel (FOV, offsets, hand, sway). */
-export function FirstPersonSection({ agentName, glovesName, viewmodel, onViewmodel, onChooseAgent, onDefaultAgent, onChooseGloves, onBareArms }: FirstPersonSectionProps) {
+export function FirstPersonSection({ agentName, defaultAgentName, glovesName, viewmodel, onViewmodel, onChooseAgent, onDefaultAgent, onChooseGloves, onBareArms }: FirstPersonSectionProps) {
   const resetViewmodel = () => onViewmodel({
     fov: DEFAULT_VIEWMODEL.fov, offsetX: DEFAULT_VIEWMODEL.offsetX, offsetY: DEFAULT_VIEWMODEL.offsetY, offsetZ: DEFAULT_VIEWMODEL.offsetZ, leftHanded: false, sway: DEFAULT_VIEWMODEL.sway,
   })
@@ -36,7 +38,7 @@ export function FirstPersonSection({ agentName, glovesName, viewmodel, onViewmod
     >
       <div className="flex flex-col gap-4">
         <FieldGroup label="Agent">
-          <PickerField value={agentName} placeholder="Default CT Agent" icon={UserRound} clearLabel="Default agent" onChoose={onChooseAgent} onClear={onDefaultAgent} />
+          <PickerField value={agentName} placeholder={defaultAgentName} icon={UserRound} clearLabel="Default agent" onChoose={onChooseAgent} onClear={onDefaultAgent} />
         </FieldGroup>
 
         <FieldGroup label="Gloves">
