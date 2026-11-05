@@ -4,7 +4,8 @@ import { evalExpr, vec, type ExprContext, type Instr, type Value } from '@/lib/m
 export { evalExpr, type ExprContext }
 
 export interface ShaderVar { default?: number[]; int?: boolean; expr?: Instr[]; srgb?: boolean; defaultTexture?: string; elements?: number }
-export interface ComboInfo { values: Record<string, number>; uniforms: [string, string][]; textures: string[]; inputs: Record<string, string> }
+/** packs: texture arrays the converter made of textures that share a sampler (array → its layers), to stay under 16. */
+export interface ComboInfo { values: Record<string, number>; uniforms: [string, string][]; textures: string[]; inputs: Record<string, string>; packs?: Record<string, string[]> }
 export interface CompositeTable {
   sets?: string[]
   features: string[]
@@ -94,11 +95,19 @@ class CompositePass {
     if (!loaded) throw new Error(`Composite combo ${id} not exported (run the pipeline's shader steps)`)
     const { combo, frag } = loaded
     const textures: Record<string, THREE.Texture> = {}
-    await Promise.all(combo.textures.map(async (name) => {
+    const load = async (name: string) => {
       const path = inputs.textures[name]
       const style = Number(inputs.params.F_PAINT_STYLE ?? 0)
       const srgb = name === 'g_tPattern' ? style >= 6 : table.ps[name]?.srgb ?? false
-      textures[name] = path ? await loadTexture(path, srgb) : fallbackTexture(name)
+      return path ? loadTexture(path, srgb) : fallbackTexture(name)
+    }
+    const disposers: (() => void)[] = []
+    await Promise.all(combo.textures.map(async (name) => {
+      const layers = combo.packs?.[name]
+      if (!layers) { textures[name] = await load(name); return }
+      const packed = packLayers(renderer, await Promise.all(layers.map(load)))
+      textures[name] = packed.texture
+      disposers.push(packed.dispose)
     }))
     for (const name of ['g_tCaseHardeningColorRamp', 'g_tPatinaAgeColorRamp']) {
       const t = textures[name]
@@ -110,11 +119,11 @@ class CompositePass {
       pattern.wrapT = addressMode(inputs.params.g_nPatternTextureVerticalSampling)
       pattern.needsUpdate = true
     }
-    return new CompositePass(renderer, table, combo, frag, inputs, textures)
+    return new CompositePass(renderer, table, combo, frag, inputs, textures, disposers)
   }
 
   private constructor(renderer: THREE.WebGLRenderer, private readonly table: CompositeTable, private readonly combo: ComboInfo,
-    frag: string, private readonly inputs: PassInputs, textures: Record<string, THREE.Texture>) {
+    frag: string, private readonly inputs: PassInputs, textures: Record<string, THREE.Texture>, private readonly disposers: (() => void)[] = []) {
     const uniforms: Record<string, THREE.IUniform> = {}
     for (const [name] of combo.uniforms) uniforms[name] = { value: null }
     for (const name of combo.textures) uniforms[name] = { value: textures[name] }
@@ -146,6 +155,7 @@ class CompositePass {
     this.material.dispose()
     this.quad.geometry.dispose()
     this.target.dispose()
+    for (const d of this.disposers) d()
   }
 
   private context(overrides: Record<string, Value>): ExprContext {
@@ -222,6 +232,58 @@ export class WeaponComposite {
     this.colorPass.dispose()
     this.roughPass.dispose()
   }
+}
+
+const COPY_VERT = `
+in vec3 position;
+out vec2 vUv;
+void main() {
+  vUv = position.xy * 0.5 + 0.5;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}`
+
+const COPY_FRAG = `
+precision highp float;
+uniform sampler2D uSrc;
+in vec2 vUv;
+out vec4 oColor;
+void main() { oColor = texture(uSrc, vUv); }`
+
+/**
+ * WebGL allows 16 textures per pass and the glove compositor uses up to 37, so its per-layer families (1 to 4) go into
+ * 4-layer texture arrays, and a few weapon combos pair two textures (the pipeline rewrites the shader to match), copied on the GPU: a 2D canvas would
+ * premultiply the alpha and wipe normals stored with alpha 0.
+ */
+export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[]): { texture: THREE.Texture; dispose: () => void } {
+  // Layers of different sizes (a pair of textures) are resampled to the largest.
+  const sizes = layers.map((l) => l.image as { width: number; height: number })
+  const width = Math.max(...sizes.map((s) => s.width)), height = Math.max(...sizes.map((s) => s.height))
+  /**
+   * An sRGB family (the shader reads it as sRGB) is stored as sRGB (SRGB8_ALPHA8): the copy writes linear values and the
+   * GPU encodes them, so dark tones keep their precision instead of banding in an 8-bit linear target.
+   */
+  const srgb = layers.some((l) => l.colorSpace === THREE.SRGBColorSpace)
+  const target = new THREE.WebGLArrayRenderTarget(width, height, layers.length, {
+    generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping,
+    colorSpace: srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace,
+  })
+  target.texture.wrapS = target.texture.wrapT = THREE.RepeatWrapping
+  const copy = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: COPY_VERT, fragmentShader: COPY_FRAG, depthTest: false, depthWrite: false,
+    uniforms: { uSrc: { value: null } },
+  })
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), copy)
+  const camera = new THREE.Camera()
+  const previous = renderer.getRenderTarget()
+  layers.forEach((layer, i) => {
+    copy.uniforms.uSrc.value = layer
+    renderer.setRenderTarget(target, i)
+    renderer.render(quad, camera)
+  })
+  renderer.setRenderTarget(previous)
+  copy.dispose()
+  quad.geometry.dispose()
+  return { texture: target.texture, dispose: () => target.dispose() }
 }
 
 /** The vertex shader's inputs to the pixel shader: the texture-space quad and the placements (its own code, decompiled). */
