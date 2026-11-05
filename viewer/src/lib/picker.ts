@@ -116,14 +116,10 @@ function matcher(query: string, strict: boolean): Score {
 }
 
 /**
- * The market name of a skin: Doppler-style finishes share one name and their kit tells the variant.
+ * The finish's name as the market writes it; the pipeline adds a Doppler's phase ("Doppler (Ruby)").
  * @param skin the catalog skin
  */
 export function variantName(skin: CatalogSkin): string {
-  const phase = /phase(\d)/.exec(skin.kit)
-  if (phase) return `${skin.name} Phase ${phase[1]}`
-  const gem = /^am_(ruby|sapphire|blackpearl|emerald)_/.exec(skin.kit)
-  if (gem) return `${skin.name} ${({ ruby: 'Ruby', sapphire: 'Sapphire', blackpearl: 'Black Pearl', emerald: 'Emerald' } as Record<string, string>)[gem[1]]}`
   return skin.name
 }
 
