@@ -331,6 +331,16 @@ function twistConstraints(info) {
   }
   return out
 }
+/** A parent transform (t, q xyzw) times a child's: the child in the parent's parent's space. */
+function composeTq(t, q, ct, cq) {
+  const [x, y, z, w] = q, [a, b, c, d] = cq
+  const rotate = ([vx, vy, vz]) => {
+    const ix = w * vx + y * vz - z * vy, iy = w * vy + z * vx - x * vz, iz = w * vz + x * vy - y * vx, iw = -x * vx - y * vy - z * vz
+    return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x]
+  }
+  const r = rotate(ct)
+  return [[t[0] + r[0], t[1] + r[1], t[2] + r[2]], [w * a + x * d + y * c - z * b, w * b - x * c + y * d + z * a, w * c + x * b - y * a + z * d, w * d - x * a - y * b - z * c]]
+}
 const skeleton = (info) => ({ bones: info.skeleton.bones, parents: info.skeleton.parents, pos: info.skeleton.pos, rot: info.skeleton.rot, twists: twistConstraints(info) })
 
 // ── Viewer JSON ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -407,18 +417,39 @@ for (const a of agents) {
 }
 written.push(writeJson('agents.json', agentIndex))
 
-// First person: the knife's pose (its idle's first frame), its inspect, and the glove skeletons.
+// First person: the knife's pose (its idle's first frame), its inspect, its own skeleton and bind, and the glove skeletons.
 const fp = { index: {}, inspect: {}, idle: {} }
+const weaponSkeletons = {}, weaponBinds = {}
 for (const [item, c] of Object.entries(config.firstPerson ?? {})) {
+  const def = itemDef(item)
+  const info = modelInfo(def.model_player)
+  weaponSkeletons[glbPath(def.model_player)] = skeleton(info)
+  // The model-space bind of the bone the knife hangs from (weapon_offset): its mesh is authored around it.
+  const s = info.skeleton
+  const hang = Math.max(0, s.bones.indexOf('weapon_offset'))
+  const chain = []
+  for (let b = hang; b >= 0; b = s.parents[b]) chain.unshift(b)
+  weaponBinds[item] = chain.reduce(([t, q], b) => composeTq(t, q, s.pos[b], s.rot[b]), [[0, 0, 0], [0, 0, 0, 1]])
+
   const idle = readJson(workFile(clipPath(item, c.idle), '.json'))
   const frame0 = (track, n) => track.slice(0, n)
+  /** The knife's own track in a clip: its secondary animation on a weapon skeleton (weapon, weapon_offset, econ). */
+  const weaponTrack = (clip) => (clip.secondary ?? []).find((x) => /skeletons\/weapons\//.test(x.skeletonName))
   const poseFile = `poses/${item}.json`
+  const idleWeapon = weaponTrack(idle)
   written.push(writeJson(`firstperson/${poseFile}`, {
     clip: c.idle,
     viewmodel: { bones: idle.bones, parents: idle.parents, pose: idle.tracks.map(([t, q]) => [frame0(t, 3), frame0(q, 4), 1]) },
+    ...(idleWeapon && { weapon: { bones: idleWeapon.bones, parents: idleWeapon.parents, pose: idleWeapon.tracks.map(([t, q]) => [frame0(t, 3), frame0(q, 4), 1]), skeleton: idleWeapon.skeletonName } }),
   }))
   fp.index[item] = poseFile
-  const asClip = (clip, name) => ({ clip: name, duration: clip.duration, frames: clip.frames, viewmodel: { bones: clip.bones, parents: clip.parents, tracks: clip.tracks } })
+  const asClip = (clip, name) => {
+    const w = weaponTrack(clip)
+    return {
+      clip: name, duration: clip.duration, frames: clip.frames, viewmodel: { bones: clip.bones, parents: clip.parents, tracks: clip.tracks },
+      ...(w && { weapon: { bones: w.bones, parents: w.parents, tracks: w.tracks, skeleton: w.skeletonName } }),
+    }
+  }
   written.push(writeJson(`firstperson/idle/${item}.json`, asClip(idle, c.idle)))
   fp.idle[poseFile] = `${item}.json`
   if (c.inspect) {
@@ -430,6 +461,8 @@ for (const [item, c] of Object.entries(config.firstPerson ?? {})) {
 written.push(writeJson('firstperson/index.json', fp.index))
 written.push(writeJson('firstperson/inspect_index.json', fp.inspect))
 written.push(writeJson('firstperson/idle_index.json', fp.idle))
+written.push(writeJson('firstperson/weapon_skeletons.json', weaponSkeletons))
+written.push(writeJson('firstperson/weapon_binds.json', weaponBinds))
 written.push(writeJson('firstperson/arms_models.json', armsModels))
 const firstGlove = Object.values(armsModels)[0]
 if (firstGlove) written.push(writeJson('firstperson/arms.json', firstGlove))

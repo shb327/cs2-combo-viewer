@@ -244,6 +244,14 @@ static class Extract
     static JsonObject Clip(Resource resource, IFileLoader loader)
     {
         var clip = (AnimationClip)resource.DataBlock!;
+        var json = ClipTracks(clip, loader);
+        // A held weapon's own track (its model's skeleton, e.g. animation/skeletons/weapons/knife_karambit.vnmskel).
+        json["secondary"] = new JsonArray(clip.SecondaryAnimations.Select(s => (JsonNode)ClipTracks(s, loader)).ToArray());
+        return json;
+    }
+
+    static JsonObject ClipTracks(AnimationClip clip, IFileLoader loader)
+    {
         var skeleton = Skeleton.FromSkeletonResource(loader, clip.SkeletonName) ?? throw new InvalidDataException("skeleton not found: " + clip.SkeletonName);
         var bones = new FrameBone[skeleton.Bones.Length];
         var tracks = skeleton.Bones.Select(_ => (T: new List<float>(), R: new List<float>())).ToArray();
