@@ -151,13 +151,33 @@ Left (B):
 - Colour and brightness on Vertigo (above).
 - The inspect against a game video; the left hand's last differences (fingers a little more curled in the viewer).
 
-### C: smaller downloads
+### C: framing and smaller downloads (branch `phase-2c-size`, in progress)
 
-- WebP (or KTX2) textures: about 112 MB per combo today as PNG; an encoder is a tool to approve first.
-- Only what first person needs (the build also extracts the third-person body's textures). Ricksaw's first-person
-  textures are 19.4 MB, his model 3.2 MB (the Default T Agent stays in the build as a choice: 31.8 MB, 1.9 MB).
-- sRGB layer arrays stored as sRGB (`SRGB8_ALPHA8`) and the composited albedo too, instead of 8-bit linear.
-- The background as WebP or AVIF (the screenshot is a 960 KB JPEG).
+Measured with `C:\cs2-data\tools\loadtime.mjs` (headless Chrome, cold cache, the production build on `vite preview`,
+which now serves the asset folder too): the reference URL, the time the embed posts `cs3d:loaded`. Results and images
+in `C:\cs2-data\reference\compare\c*`.
+
+Before: one combo downloaded **82.4 MB** in 121 requests (44 of them `.webp` misses; the 112 MB counted every shader,
+not what a combo loads): 4.0 s locally, 18.7 s at 50 Mbit/s, 72 s at 10 Mbit/s.
+
+Done:
+
+- **Framing**: defaults FOV 54, offsets 0.75 / −1 / 2 (were 59, 1.25 / 0.25 / 1.25): the hands about 1.15× bigger,
+  both hands and the blade whole on 16:9; all in the game's ranges, so the embed can set them. Screens narrower than
+  16:9 keep 16:9's horizontal angle (a phone held upright showed only the middle before). The app's saved viewmodel
+  moved to `viewmodel-v4`. `C1-FRAMING-BEFORE-AFTER.png`.
+- **WebP** (`pipeline/compress.mjs`, cwebp 1.6.0 from Google's release, in `C:\dev\tools`): albedos lossy (q 90),
+  everything else near-lossless (packed channels: lossy WebP mixes them, PSNR 22–28 dB on normals); RGB under zero alpha
+  kept (`-exact`); textures over 2048 halved (both compositors render at 2048: the 4096 glove AO was 21.9 MB). The
+  viewer already loads `.webp` first. 82.4 → 44.2 MB; a render differs from PNG by 45 dB PSNR (noise floor 59 dB),
+  not visible at 2× zoom (`c2-zoom-png-webp.png`).
+- **sRGB storage**: packed layer families with sRGB layers and the composited glove albedo are `SRGB8_ALPHA8`
+  (render 54 dB from before: only dark-tone precision changes).
+
+Next (in this order): agents' first-person model (`glb`: only `firstperson_*` meshes; `body` stays whole) and
+first-person textures only; the weapon shader table split per combo (`customweapon.json` is 1.5 MB, 1144 combos);
+the background in sizes for the screen as WebP; the environment EXR as half-float RGB (5.85 MB, 32-bit RGBA today);
+then the after measurements and the per-item sizes.
 
 ### D: names, more finishes, the look
 
