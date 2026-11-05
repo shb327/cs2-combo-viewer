@@ -80,6 +80,10 @@ KitLayer = { params, textures }                 // values
          | { copy: [alias, property, target] }
 ```
 
+`kits/vanilla.json` is the finish of a knife without a paint kit (Combo Skin's vanilla knives): paint index 0, no
+shader or style, only the weapon-wide wear and grunge (the viewer's `bare` style samples them and paints nothing, so the
+model's own materials show). Every knife lists it in `index.json`.
+
 Which path a kit takes:
 
 | Kit | Path | Needs |
@@ -156,3 +160,56 @@ Built by `pipeline/build-maps.mjs` (Vertigo so far). The studio background needs
 | `scenes.json` | `InspectSceneData[]` (`lib/viewer/inspect-scene.ts`): with `glb: null` only the lights and cameras are used |
 
 The `scenes.json` entry for a still background: `background` (`{ widths, aspect }`: the WebP widths, 960 to 3840, and the screenshot's aspect), `camera` (the eye: origin, level, its `forward` turned `viewYaw` from the sun), `exposure` (the middle of the post volume's range), and `weapon` with one camera (`"3"`, the same), `sun` (`light_environment`: `direction` where its light travels in glTF axes, `color` sRGB 0–1, `brightness`) and `ambientCube` (+X, −X, +Y, −Y, +Z, −Z radiance: the sky colour × intensity ÷ π above, the sky ambient bounce below, their mean at the sides). In first person the item is lit by the sun and the ambient cube; the environment only reflects.
+
+## Hosting (phase 3)
+
+The assets go on Cloudflare R2 behind its CDN with long cache lifetimes, so a URL must never change meaning: once a
+browser or the CDN has a file under a name, that name always holds those bytes. Paths keyed only by game path don't
+give that (a CS2 update can change `weapon_knife_karambit.glb` in place), nor do the viewer's JSON files (rebuilt with
+every update). The layout, as `pipeline/hosting.mjs` computes it (`C:\cs2-data\extracted\work\hosting\manifest.json`):
+
+```
+<cdn>/
+  g/<game path>.<sha256, 12 hex>.<ext>   every model (.glb), texture (.webp) and EXR, named by its content
+  r/<release>/                           one build's viewer data: the JSON, the compositing shaders, the maps
+```
+
+- **`g/`, content-hashed.** A file's name includes the first 12 hex digits of its SHA-256, so a changed file gets a new
+  name and an unchanged one keeps its name across builds. Files many combos use are one file each, stored and uploaded
+  once and cached once by visitors: the weapon grunge and wear (every knife finish), each glove model's textiles and
+  textures (every finish of that glove), each agent's arms (every combo with that agent), shared paint textures (the
+  Doppler phases share most of theirs).
+- **`r/<release>/`, versioned.** The viewer's JSON, the shader tables and GLSL and the map data change together, so they
+  go up as one folder; `<release>` is a hash of that folder's contents and of the `g/` names it uses, so a rebuild with
+  nothing changed gives the same release and uploads nothing. Inside it, the JSON names game files by their `g/` key
+  (rewritten from game paths when publishing; a texture's `.png` becomes its hashed `.webp`, so the viewer's WebP-first
+  lookup asks for it directly and no PNG is hosted).
+- **Cache headers**: both are immutable: `Cache-Control: public, max-age=31536000, immutable`. Nothing is overwritten,
+  so there is no mutable file to expire. The viewer build is given its release (`VITE_ASSET_BASE=<cdn>/r/<release>/`
+  and a game-file base `<cdn>/g/`, which part B adds); a new asset release ships with a viewer deploy, and old releases
+  stay up a while so pages already open keep working. Unused `g/` files can be deleted once no kept release names them.
+- **Content types**: `.webp` `image/webp`, `.glb` `model/gltf-binary`, `.exr` `image/x-exr`, `.json`
+  `application/json`, `.glsl` `text/plain`. The CDN compresses JSON and GLSL on the way out; WebP and EXR are compressed
+  already.
+
+Totals for the full catalog (build of 2026-11-06, release `7794df27d912`; WebP for every texture, no PNG):
+
+| Kind | Files | Size |
+| --- | ---: | ---: |
+| Knife finishes (paint textures) | 84 | 117.9 MB |
+| Weapon grunge and wear (every knife finish) | 6 | 8.1 MB |
+| Knife models | 20 | 12.6 MB |
+| Knife textures (the models' own: colour, normal, composite inputs) | 149 | 111.5 MB |
+| Glove finishes (paint and pattern textures) | 433 | 243.6 MB |
+| Glove models | 8 | 9.0 MB |
+| Glove textures (the models' own) | 44 | 17.2 MB |
+| Agent arms (63 agents: first-person models and textures) | 210 | 192.9 MB |
+| Shaders (1,152 weapon and 6 glove compositor combos, two tables) | 1,160 | 19.7 MB |
+| Viewer data (JSON) | 279 | 12.2 MB |
+| Maps (Vertigo: environment, backgrounds, scene) | 8 | 2.1 MB |
+| **All** | **2,401** | **746.7 MB** |
+
+Of the game files, 329 (223.8 MB) are used by more than one item or finish and are stored once. A file counts under the
+first kind that uses it, in the table's order of building (models, their textures, the shared grunge and wear, finishes,
+agents). One combo still downloads 30 to 35 MB the first time; the next combo with the same gloves or agent fetches
+only what differs.

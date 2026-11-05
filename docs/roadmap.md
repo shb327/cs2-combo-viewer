@@ -363,6 +363,30 @@ change the pinned commit.
 (Kept current.) Built: everything in the catalog, compressed. Next: the check run (`node pipeline\check.mjs`, needs
 `vite preview` on port 5321), then the spot checks.
 
+### B: hosting on Cloudflare R2 (after the bucket exists)
+
+Not started. What it needs (the layout is in [asset format: hosting](asset-format.md#hosting-phase-3)):
+
+- **What goes up**: `node pipeline\hosting.mjs` lists it (`C:\cs2-data\extracted\work\hosting\manifest.json`: each
+  file's key, source, size, SHA-256). The first upload is **2,401 files, 746.7 MB** (WebP only; the 1.3 GB of PNG stays
+  local), plus the viewer app itself wherever Combo Skin serves it.
+- **A publish step** (to write): copy each file to its key (`g/<game path>.<hash>.<ext>`, `r/<release>/…`), rewriting
+  the JSON's game paths to their `g/` keys; and in the viewer a game-file base next to `VITE_ASSET_BASE` (today both
+  hang off one base: `extracted/viewer/`, `extracted/game/`).
+- **The tool** (to approve, none is installed): **rclone** (recommended: one binary from rclone's official releases,
+  Cloudflare documents it for R2's S3 API, `rclone copy` skips what's there, sets `Cache-Control` and content types on
+  upload); or the AWS CLI (`aws s3 sync` against R2's endpoint); or a Node script on the S3 API (`@aws-sdk/client-s3`, a
+  package to add); `wrangler r2 object put` works one file per call and doesn't sync, too slow for 2,400 files. Needs an
+  R2 API token scoped to the bucket (kept out of git: `.env` is ignored).
+- **Updates upload only what changed**: `g/` names are content hashes, so after a CS2 update a changed file has a new
+  key and an unchanged one the same key; upload the manifest's keys the bucket doesn't have (keep the last uploaded
+  manifest, or list the bucket), then the new release folder (about 34 MB: data 12.2, shaders 19.7, maps 2.1; the same
+  release, and nothing to upload, when nothing changed). Deploy the viewer pointing at the new release last.
+- **Bucket settings**: a custom domain (r2.dev URLs aren't cached by the CDN and are rate-limited), CORS allowing Combo
+  Skin's origin (GET, HEAD), `Cache-Control: public, max-age=31536000, immutable` on every object. Storage 0.75 GB is in
+  R2's free tier; egress is free.
+- **Old files**: keep a few releases; delete `g/` keys no kept release names.
+
 ## Phase 3 notes (from phase 2)
 
 - **Size of everything** (rough, from the copies' file list, not built): 20 knives, 94 glove finishes (72 classic, 22
