@@ -90,11 +90,12 @@ export const DEFAULT_LIGHTING: Lighting = {
 
 /** First person's viewmodel settings (like CS2's viewmodel_fov / viewmodel_offset_* / cl_righthand). */
 export interface Viewmodel {
-  /** viewmodel_fov (54–68): the horizontal angle in degrees on a 16:9 screen (see viewmodelVerticalFov). */
+  /** viewmodel_fov (54–68): the horizontal angle in degrees on a 4:3 screen, as Source has it (see viewmodelVerticalFov). */
   fov: number
   /**
-   * viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. The defaults (0.5, 0, 1) are fitted to a game
-   * screenshot taken with unknown settings, not the game's own defaults.
+   * viewmodel_offset_x / _y / _z (inches from the eye): right, forward, up. The defaults (FOV 59, offsets 1.25, 0.25, 1.25)
+   * are fitted to a game screenshot taken with unknown settings (the overlap of the red glove and blade pixels), not the
+   * game's own defaults.
    */
   offsetX: number
   offsetY: number
@@ -109,11 +110,14 @@ export interface Viewmodel {
 }
 
 export const DEFAULT_VIEWMODEL: Viewmodel = {
-  fov: 68, offsetX: 0.5, offsetY: 0, offsetZ: 1, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
+  fov: 59, offsetX: 1.25, offsetY: 0.25, offsetZ: 1.25, leftHanded: false, sway: true, gloveFloat: 0.15, gloveSeed: null,
 }
 
-/** The camera's vertical angle for a viewmodel_fov, taken as the horizontal angle on a 16:9 screen. */
+/**
+ * The camera's vertical angle for a viewmodel_fov, taken as the horizontal angle on a 4:3 screen (Source's convention,
+ * kept on wider screens). Read as the 16:9 horizontal angle, the hands needed offsets past the game's range to match.
+ */
 export function viewmodelVerticalFov(fov: number): number {
   const rad = Math.PI / 180
-  return (2 * Math.atan(Math.tan((fov * rad) / 2) * (9 / 16))) / rad
+  return (2 * Math.atan(Math.tan((fov * rad) / 2) * (3 / 4))) / rad
 }

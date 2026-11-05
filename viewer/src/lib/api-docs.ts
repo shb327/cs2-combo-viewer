@@ -66,6 +66,8 @@ export const OPTION_PARAMS: DocRow[] = [
   { name: 'stickers', values: 'id~slot~wear~x~y~rotation~scale,…', description: 'The weapon’s stickers, comma-separated; first load only.', fallback: 'none, or the link’s' },
   { name: 'viewmodel_sway', values: '0', description: 'First person’s weapon stops swaying with the pointer.', fallback: 'on' },
   { name: 'viewmodel_left_hand', values: '1', description: 'First person holds the weapon in the left hand.', fallback: 'off' },
+  { name: 'viewmodel_fov', values: '54–68', description: 'First person’s viewmodel_fov: the horizontal angle on a 4:3 screen, in degrees, as in the game.', fallback: '59' },
+  { name: 'viewmodel_offset_x', values: '-2.5–2.5', description: 'viewmodel_offset_x, inches to the right; viewmodel_offset_y (-2–2, forward) and viewmodel_offset_z (-2–2, up) likewise.', fallback: 'the defaults fitted to a game screenshot' },
   { name: 'side', values: 'front · back', description: 'Which side of the item faces the camera: front is the initial view, back a half turn around it (the item’s other side).', fallback: 'front' },
   { name: 'knife_pose', values: 'vertical · horizontal · tilted', description: 'How a knife stands: upright, lying flat or tilted. Other items ignore it; choosing a pose brings the view back to front unless side is given too.', fallback: 'tilted' },
   { name: 'auto_rotate', values: '1', description: 'The item turns on its own.', fallback: 'off' },
@@ -76,7 +78,7 @@ export const OPTION_PARAMS: DocRow[] = [
 
 export const COMMANDS: DocRow[] = [
   { name: "{ type: 'cs3d:load', target, options? }", description: 'Shows another item. target is one of { inspect }, { def, paint }, { skin }, { sticker }, { charm }, { character }, { pin }, { patch }, { pet }; options as for cs3d:set (an agent with patches: target { character } and options { agent_patches }; a pet: target { pet } and options { pet_color, pet_animation }).' },
-  { name: "{ type: 'cs3d:set', options }", description: 'Changes float, seed, view, map, the loadout_* options, sticker_wear, sticker_card, charm_pattern, agent_patches, pet_color, pet_animation, viewmodel_sway, viewmodel_left_hand, side, knife_pose or auto_rotate without reloading the page (an agent’s gloves or weapon, and view, redraw the model behind the last frame).' },
+  { name: "{ type: 'cs3d:set', options }", description: 'Changes float, seed, view, map, the loadout_* options, sticker_wear, sticker_card, charm_pattern, agent_patches, pet_color, pet_animation, viewmodel_sway, viewmodel_left_hand, viewmodel_fov, viewmodel_offset_*, side, knife_pose or auto_rotate without reloading the page (an agent’s gloves or weapon, and view, redraw the model behind the last frame).' },
   { name: "{ type: 'cs3d:setMap', map }", description: 'Changes the map (an inspect map id, or studio).' },
   { name: "{ type: 'cs3d:inspect' }", description: 'Plays the weapon’s inspect animation (first person).' },
   { name: "{ type: 'cs3d:inspectGloves' }", description: 'Looks at the gloves: in first person with skin gloves, or on a gloves skin.' },
