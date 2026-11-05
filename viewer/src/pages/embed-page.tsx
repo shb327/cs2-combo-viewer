@@ -34,7 +34,9 @@ export function EmbedPage() {
   const { catalog, attachments, agents, error: catalogError } = useCatalog()
   const state = useViewerState(false)
   const viewer = useViewer(viewportRef, !initial.lite)
-  const [lighting, setLighting] = useState<Lighting>({ ...DEFAULT_LIGHTING, map: initial.options.map && initial.options.map !== 'studio' ? initial.options.map : null })
+  /** No `map`: the default map (Vertigo), except over a transparent background; `map=studio`: the studio. */
+  const map = initial.options.map ?? (initial.transparent ? 'studio' : DEFAULT_LIGHTING.map)
+  const [lighting, setLighting] = useState<Lighting>({ ...DEFAULT_LIGHTING, map: map && map !== 'studio' ? map : null })
   const [viewmodel, setViewmodel] = useState<Viewmodel>({ ...DEFAULT_VIEWMODEL, leftHanded: false })
   const [view, setView] = useState<ViewOptions>({ spin: false, palmUp: false, knifePose: initial.options.knife_pose ?? 'tilted', back: initial.options.side === 'back' })
   const [shareOpen, setShareOpen] = useState<ShareSource | null>(null)

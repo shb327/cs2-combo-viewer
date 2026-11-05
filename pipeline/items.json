@@ -1,12 +1,28 @@
 {
   "knives": {
-    "weapon_knife_karambit": ["am_ruby_marbleized"]
+    "weapon_knife_karambit": [
+      "am_ruby_marbleized"
+    ]
   },
   "gloves": {
-    "specialist_gloves": ["specialist_kimono_diamonds_red"]
+    "specialist_gloves": [
+      "specialist_kimono_diamonds_red"
+    ]
   },
-  "agents": ["customplayer_t_map_based"],
+  "agents": [
+    "customplayer_t_map_based"
+  ],
   "firstPerson": {
-    "weapon_knife_karambit": { "idle": "idle1_karambit", "inspect": "lookat01_karambit" }
+    "weapon_knife_karambit": {
+      "idle": "idle1_karambit",
+      "inspect": "lookat01_karambit"
+    }
+  },
+  "maps": {
+    "de_vertigo": {
+      "name": "Vertigo",
+      "background": "C:/cs2-data/reference/vertigo-background.jpg",
+      "viewYaw": -30
+    }
   }
 }

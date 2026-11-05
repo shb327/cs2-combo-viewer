@@ -1,11 +1,19 @@
 import * as THREE from 'three'
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
-import { loadBackgroundVideo } from '@/lib/viewer/fixed-inspect'
+import { loadBackground } from '@/lib/viewer/fixed-inspect'
 import { InspectScene, loadScenes } from '@/lib/viewer/inspect-scene'
 import { MapVeil } from '@/lib/viewer/map-veil'
 import { PostPipeline } from '@/lib/viewer/post'
+
+/** A map's HDR panorama: maps/<id>.hdr, else maps/<id>.exr (the map's sky as the game stores it), or null. */
+function loadPanorama(base: string): Promise<THREE.DataTexture | null> {
+  return new RGBELoader().loadAsync(base + '.hdr')
+    .catch(() => new EXRLoader().setDataType(THREE.HalfFloatType).loadAsync(base + '.exr'))
+    .catch(() => null)
+}
 
 /** What the map stage needs from the viewer. */
 export interface MapStageHost {
@@ -32,7 +40,7 @@ export interface MapStageHost {
 /**
  * Where the model is shown: the studio (a color and a room environment) or an inspect map — its baked HDR panorama
  * as the background and, prefiltered, as the environment, its 3D scene and lights, its pre-rendered background video
- * and its own post (tone curve, bloom, grade).
+ * (or a still screenshot) and its own post (tone curve, bloom, grade).
  */
 export class MapStage {
   private readonly studioBackground: THREE.Color | null
@@ -40,7 +48,7 @@ export class MapStage {
   private post: PostPipeline | null = null
   /** The post pipeline is used (off: the plain draw, lighter on slow devices). */
   private postEnabled = true
-  private map: { id: string; background: THREE.Texture; environment: THREE.Texture; scene3d: InspectScene | null; video: HTMLVideoElement | null } | null = null
+  private map: { id: string; background: THREE.Texture; environment: THREE.Texture; scene3d: InspectScene | null; video: HTMLVideoElement | HTMLImageElement | null } | null = null
   private token = 0
   /** Covers the view while the map changes. */
   private readonly veil: MapVeil
@@ -61,7 +69,8 @@ export class MapStage {
     return this.map?.scene3d ?? null
   }
 
-  get video(): HTMLVideoElement | null {
+  /** The background drawn behind the canvas: the map's video or still image. */
+  get video(): HTMLVideoElement | HTMLImageElement | null {
     return this.map?.video ?? null
   }
 
@@ -85,8 +94,8 @@ export class MapStage {
     const dataBase = this.host.dataBase
     const [, texture, video, scenes] = await Promise.all([
       this.veil.cover(),
-      new RGBELoader().loadAsync(dataBase + 'maps/' + id + '.hdr').catch(() => null),
-      loadBackgroundVideo(dataBase + 'backgrounds/' + id + '.mp4'),
+      loadPanorama(dataBase + 'maps/' + id),
+      loadBackground(dataBase + 'backgrounds/' + id),
       loadScenes(dataBase),
     ])
     const sceneData = scenes.get(id)
@@ -116,7 +125,7 @@ export class MapStage {
     if (getComputedStyle(container).position === 'static') container.style.position = 'relative'
     canvas.style.position = 'relative'
     container.insertBefore(video, canvas)
-    void video.play().catch(() => {})
+    if (video instanceof HTMLVideoElement) void video.play().catch(() => {})
     if (scene3d) scene.add(scene3d.lights, scene3d.sceneLights)
     if (scene3d?.data.post) {
       this.post = new PostPipeline(renderer, scene3d.data.post, () => this.draw())

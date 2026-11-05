@@ -22,7 +22,7 @@ import { MapStage } from '@/lib/viewer/map-stage'
 import { loadAgent, poseAgent, setAgentGloves, setAgentWeapon, type AgentRig } from '@/lib/viewer/agent-view'
 import { isGlove, ModelLoader, setGloveSeed, setWeaponSeed, type LoadSink } from '@/lib/viewer/model-loader'
 import { WeaponAttachments } from '@/lib/viewer/weapon-attachments'
-import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel } from '@/lib/viewer/viewer-options'
+import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel, viewmodelVerticalFov } from '@/lib/viewer/viewer-options'
 import { cropToContent } from '@/lib/canvas'
 import { AttachmentEditor, type EditorEvents } from '@/lib/viewer/attachment-editor'
 
@@ -1168,11 +1168,11 @@ export class SkinViewer {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1
     this.camera.aspect = w / h
     /**
-     * viewmodel_fov is the viewmodel's vertical angle, as skincraft.gg (which matches the game) draws it: at 16:9 a 68 puts
-     * the AWP's scope 1.35x smaller than treating 68 as the horizontal angle at 4:3 (53.4 vertical) did. The canvas' shape
-     * only crops the sides.
+     * viewmodel_fov is the viewmodel's horizontal angle on a 16:9 screen (68 → 41.6 vertical): checked against a game
+     * screenshot, where the vertical reading (68) and the horizontal-at-4:3 one (53.6) both drew the hands about 1.3x to
+     * 1.6x too small. The canvas' shape only crops the sides.
      */
-    this.camera.fov = this.firstPerson ? this.viewmodel.fov : 35
+    this.camera.fov = this.firstPerson ? viewmodelVerticalFov(this.viewmodel.fov) : 35
     this.camera.updateProjectionMatrix()
     if (!this.firstPerson) this.fixed.fitFov()
     this.renderer.setSize(w, h)

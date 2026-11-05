@@ -1,6 +1,6 @@
 // The "extract" command: decodes resources from a copied VPK into exact output paths, in one run.
 //
-//   shader-dump extract --vpk <pak01_dir.vpk> --jobs <jobs.json> --report <report.json>
+//   shader-dump extract --vpk <pak01_dir.vpk | maps/<map>_vanity.vpk> --jobs <jobs.json> --report <report.json>
 //
 // jobs.json: [{ "kind": "...", "path": "<game path, without _c>", "out": "<file>" }, ...]
 //   texture   vtex → PNG, or EXR for float textures (the report gives the file actually written)
@@ -9,6 +9,7 @@
 //   model     vmdl → GLB (geometry and skin only) and <out>.json (skeleton, meshes, draw calls, mesh groups)
 //   clip      vnmclip → JSON (skeleton, bones, parents, frames of local position / rotation)
 //   skeleton  vnmskel → JSON (bones, parents, local bind position / rotation)
+//   entities  vents (a map's entity lump) → text: every entity's key values, as VRF dumps them
 //   raw       a plain file (items_game.txt, localization) copied as it is
 
 using System.Globalization;
@@ -64,6 +65,7 @@ static class Extract
                     "model" => Model(resource, loader, outPath),
                     "clip" => WriteJson(outPath, Clip(resource, loader)),
                     "skeleton" => WriteJson(outPath, SkeletonJson(Skeleton.FromSkeletonData(((BinaryKV3)resource.DataBlock!).Data))),
+                    "entities" => WriteText(outPath, ((EntityLump)resource.DataBlock!).ToEntityDumpString()),
                     _ => throw new ArgumentException("unknown kind " + kind),
                 };
             }
@@ -76,6 +78,12 @@ static class Extract
         }
         File.WriteAllText(output(reportPath), report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"extract: {report.Count} jobs, {report.Count(e => e!["error"] != null)} failed");
+    }
+
+    static string WriteText(string path, string text)
+    {
+        File.WriteAllText(path, text);
+        return path;
     }
 
     static string WriteJson(string path, JsonNode node)

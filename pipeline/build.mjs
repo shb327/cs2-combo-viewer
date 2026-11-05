@@ -415,9 +415,10 @@ written.push(writeJson('firstperson/arms_models.json', armsModels))
 const firstGlove = Object.values(armsModels)[0]
 if (firstGlove) written.push(writeJson('firstperson/arms.json', firstGlove))
 
-// Catalogs outside this project's scope (stickers, charms, pins, patches, pets, inspect maps): empty, so the viewer loads.
+// Catalogs outside this project's scope (stickers, charms, pins, patches, pets): empty, so the viewer loads. The inspect
+// maps (maps.json, scenes.json) are build-maps.mjs's.
 for (const [file, empty] of Object.entries({
-  'maps.json': [], 'stickers.json': { scratches: '', stickers: [] }, 'charms.json': { charms: [] }, 'pins.json': { pins: [], models: {} },
+  'stickers.json': { scratches: '', stickers: [] }, 'charms.json': { charms: [] }, 'pins.json': { pins: [], models: {} },
   'patches.json': { patches: [], card: { color: '', normal: '' } }, 'pets.json': { pets: [], models: {} }, 'pets/anim_index.json': { skeletons: {}, clips: [] },
 })) written.push(writeJson(file, empty))
 

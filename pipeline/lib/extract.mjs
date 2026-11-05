@@ -17,18 +17,19 @@ export function runTool(args) {
 }
 
 /**
- * Extracts a list of jobs ({ kind, path, out }) from pak01 in one run.
+ * Extracts a list of jobs ({ kind, path, out }) from one of the copied VPKs (pak01 unless given) in one run.
  * @returns the report, by game path: { kind, path, out } or { kind, path, error }
  */
-export function extract(jobs, workDir) {
+export function extract(jobs, workDir, vpk = PAK01) {
   if (!jobs.length) return new Map()
   const dir = insideRoot(EXTRACTED, workDir)
   mkdirSync(dir, { recursive: true })
   const jobsFile = path.join(dir, 'jobs.json')
   const reportFile = path.join(dir, 'report.json')
   for (const j of jobs) insideRoot(EXTRACTED, j.out)
+  insideRoot(SOURCE, vpk)
   writeFileSync(jobsFile, JSON.stringify(jobs))
-  process.stdout.write(runTool(['extract', '--vpk', PAK01, '--jobs', jobsFile, '--report', reportFile]))
+  process.stdout.write(runTool(['extract', '--vpk', vpk, '--jobs', jobsFile, '--report', reportFile]))
   const report = JSON.parse(readFileSync(reportFile, 'utf8'))
   return new Map(report.map((r) => [r.path, r]))
 }

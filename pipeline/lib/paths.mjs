@@ -1,10 +1,12 @@
 // Where the pipeline may read and write. Every script resolves its paths through insideRoot, so nothing outside the
-// copies (SOURCE) is ever read and nothing outside EXTRACTED is ever written.
+// copies (SOURCE) and the user's screenshots (REFERENCE) is ever read and nothing outside EXTRACTED is ever written.
 
 import path from 'node:path'
 
 export const SOURCE = path.resolve(process.env.CS2_SOURCE ?? 'C:/cs2-data/source')
 export const EXTRACTED = path.resolve(process.env.CS2_EXTRACTED ?? 'C:/cs2-data/extracted')
+/** The user's own screenshots of the game (map backgrounds, references): read only, never in git. */
+export const REFERENCE = path.resolve(process.env.CS2_REFERENCE ?? 'C:/cs2-data/reference')
 /** The asset folder the viewer's dev server serves at /assets/. */
 export const WEB = path.join(EXTRACTED, 'web')
 /** The viewer's own data and the decoded game files, as the viewer addresses them (VIEWER_DATA, GAME_ROOT). */

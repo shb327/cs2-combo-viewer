@@ -11,7 +11,8 @@ What the viewer (`viewer/`) loads, and in what shape, worked out from its loadin
     agents.json              agents and their models
     firstperson/             poses, skeletons, clips
     shaders/                 the game's compositing shaders, converted (customweapon.json, cw_<id>.frag.glsl, customglove.json, cg_<id>.frag.glsl)
-    maps.json, scenes.json   inspect maps (optional)
+    maps.json, scenes.json   inspect maps (optional; Vertigo is the default)
+    maps/, backgrounds/      their environments and backgrounds
     stickers.json, charms.json, pins.json, patches.json, pets.json, pets/anim_index.json   out of scope: empty stand-ins
   extracted/game/            decoded game files at their game paths (GAME_ROOT)
     <model>.glb
@@ -126,4 +127,13 @@ Skeletons and clips are in Source space (x forward, y left, z up, inches); meshe
 
 ## Inspect maps
 
-Not built yet. The studio background needs no files. An inspect map needs `maps.json`, `maps/<id>.hdr` (reflections), `scenes.json` (cameras, lights, light probe, post) and **`backgrounds/<id>.mp4`**, a pre-rendered video of the map from the inspect camera that the game files don't contain: it has to be rendered.
+Built by `pipeline/build-maps.mjs` (Vertigo so far). The studio background needs no files. An inspect map needs:
+
+| File | Content |
+| --- | --- |
+| `maps.json` | `{ id, name, hdr, thumb }[]`: the maps on offer |
+| `maps/<id>.hdr` or `maps/<id>.exr` | the environment (reflections): the vanity scene's baked cubemap as an equirectangular EXR |
+| `backgrounds/<id>.mp4` or `backgrounds/<id>.jpg` | drawn behind the canvas: a pre-rendered video, else a still screenshot taken in game (Vertigo: the user's own, 3840×2160) |
+| `scenes.json` | `InspectSceneData[]` (`lib/viewer/inspect-scene.ts`): with `glb: null` only the lights and cameras are used |
+
+The `scenes.json` entry for a still background: `camera` (the eye: origin, level, its `forward` turned `viewYaw` from the sun), `exposure` (the middle of the post volume's range), and `weapon` with one camera (`"3"`, the same), `sun` (`light_environment`: `direction` where its light travels in glTF axes, `color` sRGB 0–1, `brightness`) and `ambientCube` (+X, −X, +Y, −Y, +Z, −Z radiance: the sky colour × intensity ÷ π above, the sky ambient bounce below, their mean at the sides). In first person the item is lit by the sun and the ambient cube; the environment only reflects.
