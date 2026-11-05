@@ -159,6 +159,8 @@ export class GloveTargets {
     })
     for (const t of this.target.textures) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace }
     const [albedo, normal, orm, cloth] = this.target.textures
+    /** The resolve writes linear albedo: stored as sRGB (SRGB8_ALPHA8), so dark tones don't band as in 8-bit linear. */
+    albedo.colorSpace = THREE.SRGBColorSpace
     this.material = new THREE.MeshPhysicalMaterial({
       map: albedo, normalMap: normal, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1,
       sheen: 1, sheenColor: new THREE.Color(1, 1, 1).multiplyScalar(Math.min(1, sheenScale * 0.5)), sheenColorMap: cloth, sheenRoughness: 0.6,
