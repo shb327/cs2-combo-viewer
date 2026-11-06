@@ -8,10 +8,13 @@ import { InspectScene, loadScenes } from '@/lib/viewer/inspect-scene'
 import { MapVeil } from '@/lib/viewer/map-veil'
 import { PostPipeline } from '@/lib/viewer/post'
 
-/** A map's HDR panorama: maps/<id>.hdr, else maps/<id>.exr (the map's sky as the game stores it), or null. */
+/**
+ * A map's HDR panorama: maps/<id>.exr (the map's sky as the game stores it, what build-maps.mjs writes), else
+ * maps/<id>.hdr, or null. The EXR first, so a normal load makes no failing request.
+ */
 function loadPanorama(base: string): Promise<THREE.DataTexture | null> {
-  return new RGBELoader().loadAsync(base + '.hdr')
-    .catch(() => new EXRLoader().setDataType(THREE.HalfFloatType).loadAsync(base + '.exr'))
+  return new EXRLoader().setDataType(THREE.HalfFloatType).loadAsync(base + '.exr')
+    .catch(() => new RGBELoader().loadAsync(base + '.hdr'))
     .catch(() => null)
 }
 
