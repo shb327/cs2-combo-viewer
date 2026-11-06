@@ -169,9 +169,10 @@ give that (a CS2 update can change `weapon_knife_karambit.glb` in place), nor do
 every update). The layout, as `pipeline/hosting.mjs` computes it (`C:\cs2-data\extracted\work\hosting\manifest.json`):
 
 ```
-<cdn>/
+https://assets.combo.skin/              the R2 bucket combo-skin-assets (pipeline/upload.mjs)
   g/<game path>.<sha256, 12 hex>.<ext>   every model (.glb), texture (.webp) and EXR, named by its content
   r/<release>/                           one build's viewer data: the JSON, the compositing shaders, the maps
+  release.json                           { "release": "<release>" }: the current release
 ```
 
 - **`g/`, content-hashed.** A file's name includes the first 12 hex digits of its SHA-256, so a changed file gets a new
@@ -182,17 +183,28 @@ every update). The layout, as `pipeline/hosting.mjs` computes it (`C:\cs2-data\e
 - **`r/<release>/`, versioned.** The viewer's JSON, the shader tables and GLSL and the map data change together, so they
   go up as one folder; `<release>` is a hash of that folder's contents and of the `g/` names it uses, so a rebuild with
   nothing changed gives the same release and uploads nothing. Inside it, the JSON names game files by their `g/` key
-  (rewritten from game paths when publishing; a texture's `.png` becomes its hashed `.webp`, so the viewer's WebP-first
-  lookup asks for it directly and no PNG is hosted).
-- **Cache headers**: both are immutable: `Cache-Control: public, max-age=31536000, immutable`. Nothing is overwritten,
-  so there is no mutable file to expire. The viewer build is given its release (`VITE_ASSET_BASE=<cdn>/r/<release>/`
-  and a game-file base `<cdn>/g/`, which part B adds); a new asset release ships with a viewer deploy, and old releases
-  stay up a while so pages already open keep working. Unused `g/` files can be deleted once no kept release names them.
+  (rewritten from game paths when publishing, object keys too, as in `texture_average.json` and
+  `firstperson/weapon_skeletons.json`; a texture's `.png` or `.vtex` becomes its hashed `.webp`, so the viewer's
+  WebP-first lookup asks for it directly and no PNG is hosted). The release is a hash of the files as published.
+- **`release.json`, the pointer.** The one file that changes: uploaded last, so it never names a release whose files
+  aren't all there. The viewer reads it once at start-up, so a CS2 update needs no viewer deploy.
+- **Cache headers**: `g/` and `r/` are immutable: `Cache-Control: public, max-age=31536000, immutable` (nothing there
+  is ever overwritten); the pointer `public, max-age=60`, so a new release reaches pages within a minute. Old releases
+  stay up, so pages already open keep working; unused `g/` files can be deleted once no kept release names them.
+- **How the viewer finds it** (`viewer/src/lib/asset-layout.ts`): with an absolute `VITE_ASSET_BASE`
+  (`https://assets.combo.skin`) it reads `<base>release.json` and loads the viewer data from `<base>r/<release>/`; game
+  files by the keys the JSON gives (`<base>g/…`). `VITE_ASSET_RELEASE=<release>` pins a release in the build instead
+  (no pointer request: for a viewer change that needs new data, or the screenshot worker); `VITE_ASSET_RELEASE=local`
+  keeps the local layout. A relative base (`/assets/`, the dev server and `vite preview`) is the local layout:
+  `extracted/viewer/` and `extracted/game/`, game paths as built.
+- **Not hosted**: the agents' third-person bodies (`agents.json` `body`, 63 models) and the stand-ins for stickers,
+  charms, pins, patches and pets: the hosted viewer shows combos in first person and the orbit view, not the agent
+  view.
 - **Content types**: `.webp` `image/webp`, `.glb` `model/gltf-binary`, `.exr` `image/x-exr`, `.json`
   `application/json`, `.glsl` `text/plain`. The CDN compresses JSON and GLSL on the way out; WebP and EXR are compressed
   already.
 
-Totals for the full catalog (build of 2026-11-06, release `7794df27d912`; WebP for every texture, no PNG):
+Totals for the full catalog (build of 2026-11-06, release `3de0d6e58111` as uploaded; WebP for every texture, no PNG):
 
 | Kind | Files | Size |
 | --- | ---: | ---: |
@@ -205,9 +217,9 @@ Totals for the full catalog (build of 2026-11-06, release `7794df27d912`; WebP f
 | Glove textures (the models' own) | 44 | 17.2 MB |
 | Agent arms (63 agents: first-person models and textures) | 210 | 192.9 MB |
 | Shaders (1,152 weapon and 6 glove compositor combos, two tables) | 1,160 | 19.7 MB |
-| Viewer data (JSON) | 279 | 12.2 MB |
+| Viewer data (JSON, as published) | 279 | 12.3 MB |
 | Maps (Vertigo: environment, backgrounds, scene) | 8 | 2.1 MB |
-| **All** | **2,401** | **746.7 MB** |
+| **All** (plus `release.json`, 26 bytes) | **2,401** | **746.8 MB** |
 
 Of the game files, 329 (223.8 MB) are used by more than one item or finish and are stored once. A file counts under the
 first kind that uses it, in the table's order of building (models, their textures, the shared grunge and wear, finishes,

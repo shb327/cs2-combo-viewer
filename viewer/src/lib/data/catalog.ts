@@ -1,9 +1,9 @@
 import type { Item, PaintParams, Rgb, Vec4 } from '@/lib/data/items'
 import type { Vmat } from '@/lib/materials/glove'
 
-/** Where the viewer data and the decoded game files live (relative to the asset base). */
-export const VIEWER_DATA = 'extracted/viewer/'
-export const GAME_ROOT = 'extracted/game/'
+/** Where the viewer data and the decoded game files live (relative to the asset base): see asset-layout. */
+export { GAME_ROOT, VIEWER_DATA } from '@/lib/asset-layout'
+import { GAME_ROOT, VIEWER_DATA } from '@/lib/asset-layout'
 
 export interface CatalogSkin {
   item: string

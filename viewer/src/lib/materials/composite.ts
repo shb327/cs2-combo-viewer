@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { VIEWER_DATA } from '@/lib/asset-layout'
 import { evalExpr, vec, type ExprContext, type Instr, type Value } from '@/lib/materials/composite-expr'
 
 export { evalExpr, type ExprContext }
@@ -41,7 +42,7 @@ export function loadCombo(base: string, table: CompositeTable, prefix: string, i
   return entry
 }
 
-export const SHADER_DIR = 'extracted/viewer/shaders/'
+export const SHADER_DIR = VIEWER_DATA + 'shaders/'
 const SIZE = 2048
 
 let tablePromise: Promise<CompositeTable> | null = null
@@ -51,7 +52,7 @@ const APPLY_CHANNELS = false
 /** Decoded texture → channel count for the game's 1- / 2-channel formats (BC4 / BC5), which the GPU reads as
  * (r, 0, 0, 1) / (r, g, 0, 1) while the exported PNGs repeat the channel. */
 function loadChannels(base: string): Promise<Record<string, number>> {
-  channelsPromise ??= fetch(base + 'extracted/viewer/texture_channels.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+  channelsPromise ??= fetch(base + VIEWER_DATA + 'texture_channels.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
   return channelsPromise
 }
 

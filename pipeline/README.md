@@ -17,7 +17,9 @@ Builds the viewer's data from copies of the CS2 game files. See [docs/asset-form
 | `build-maps.mjs` | For the maps in `items.json`: the background (your screenshot, as WebP in five widths), the environment (half-float EXR), and the sun and sky light from the map's vanity VPK (`maps.json`, `scenes.json`). |
 | `compress.mjs` | A WebP next to every extracted PNG (the viewer loads it first): albedos lossy, everything else near-lossless, over 2048 halved. Only PNGs whose content changed are encoded. |
 | `check.mjs` | Loads every built finish and agent in the viewer (headless Chrome), compiles every compositing shader, and writes contact sheets and a coverage report. |
-| `hosting.mjs` | The files hosting needs, with their content-hashed names, and the totals (`docs/asset-format.md`, "Hosting"). |
+| `hosting.mjs` | The files hosting needs, with their content-hashed names, and the totals (`docs/asset-format.md`, "Hosting"); stages the bucket's layout (`lib/publish.mjs`: the release's JSON rewritten to name game files by their keys, and the pointer). |
+| `upload.mjs` | Sends the staged bucket to Cloudflare R2 with rclone: only what the bucket doesn't have, game files first, the pointer last; never deletes or replaces (below, "Upload"). |
+| `rclone-password.ps1` | Hands rclone its config password from a file only your Windows user can decrypt, so uploads run without typing it. |
 | `items.json` | The pinned catalog (what to build) and the maps. |
 | `lib/` | Paths and their guards, the C# tool runner, a KeyValues parser. |
 
@@ -60,6 +62,9 @@ node pipeline\compress.mjs
 # 5. The checks (needs the viewer's production build on vite preview, port 5321) and the hosting list
 node pipeline\check.mjs; node pipeline\check.mjs --shaders
 node pipeline\hosting.mjs
+# 6. The upload to R2 (below): only what's new, then the new release
+node pipeline\upload.mjs --dry-run
+node pipeline\upload.mjs
 ```
 
 The build is incremental: extraction is cached by each source file's CRC32 (from pak01's directory) and every output
@@ -78,6 +83,43 @@ http://127.0.0.1:5320/skin/weapon_knife_karambit/am_ruby_marbleized?fp=1&fpg=spe
 `CS2_SOURCE`, `CS2_EXTRACTED`, `CS2_REFERENCE`, `SHADER_DUMP` and `CWEBP` override the default folders and the tools'
 paths. Only the agents' first-person meshes and textures are built; `"agentBodies": true` in `items.json` adds their
 bodies' textures (for the third-person agent view, which loads the whole model).
+
+## Upload
+
+The assets are served from the R2 bucket `combo-skin-assets` at `https://assets.combo.skin` (layout and headers in
+[docs/asset-format.md](../docs/asset-format.md#hosting-phase-3)).
+
+**After a CS2 update**, once the copies are fresh: the build, `compress.mjs` and `hosting.mjs` as above, then
+
+```powershell
+node pipeline\upload.mjs --dry-run   # what it would send: counts and sizes by folder and by header
+node pipeline\upload.mjs             # sends it, then checks the bucket against the manifest
+```
+
+It lists the bucket and sends only the manifest's keys the bucket doesn't have: changed game files (a new hash in the
+name), the new release folder, then `release.json`, which switches every page to the new release within a minute (its
+cache lifetime). With nothing changed the release is the same and it sends nothing. It prints what it sent and keeps a
+record in `C:\cs2-data\extracted\work\hosting\uploads\`. It only runs `rclone copy`, with `--immutable` for everything
+but the pointer: nothing is deleted, and a key already there with other bytes stops it. Old releases and game files
+stay in the bucket; removing them is a separate, deliberate step (not written).
+
+Each file goes up with `Cache-Control: public, max-age=31536000, immutable` (the pointer: `public, max-age=60`) and the
+content type of its extension (`lib/publish.mjs`; an unknown extension stops `hosting.mjs`).
+
+**Setup (once)**: rclone v1.75.2 for Windows from `downloads.rclone.org` (`rclone-v1.75.2-windows-amd64.zip`, checked
+against `SHA256SUMS` and its signature: key `FBF737ECE9F8AB18604BD2AC93935E02FF3B54FA`), unzipped in `C:\dev\tools`
+(`RCLONE` overrides the path). Then, by hand: an R2 API token with Object Read & Write on `combo-skin-assets` only;
+`rclone config` with a remote `combo-r2` (`RCLONE_REMOTE`), type `s3`, provider `Cloudflare`, the token's access key and
+secret, region `auto`, the account's S3 endpoint; `rclone config update combo-r2 no_check_bucket true` (a bucket-scoped
+token can't check or create buckets); a config password (`rclone config`, `s`); and the password stored for unattended
+runs:
+
+```powershell
+Read-Host -AsSecureString 'rclone config password' | ConvertFrom-SecureString | Set-Content -Encoding ascii C:\dev\tools\rclone-pass.dpapi
+```
+
+The key, the secret and the endpoint stay in rclone's config, never in this repository; `upload.mjs` hides 32-digit
+hex strings (the account ID) in anything it prints from rclone.
 
 ## Output
 

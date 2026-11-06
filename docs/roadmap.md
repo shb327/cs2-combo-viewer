@@ -7,7 +7,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
 | 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | Done |
-| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | A in review |
+| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | A done; B in review |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
@@ -304,11 +304,11 @@ Left (D):
 
 Phase 3 is coverage: every knife, glove and agent Combo Skin can show, built and checked, so the PC is only needed when
 CS2 adds items. Two parts, one branch and pull request each: A builds and checks everything locally; B uploads it to
-Cloudflare R2 (after the bucket exists).
+Cloudflare R2 and the viewer loads from there.
 
 ### A: build everything, locally (branch `phase-3a-coverage`)
 
-Status: **done, in review**. Images and reports in `C:\cs2-data\reference\compare\p3\`.
+Status: **done** (PR #7). Images and reports in `C:\cs2-data\reference\compare\p3\`.
 
 - [x] Incremental build (below).
 - [x] The build list from Combo Skin's catalog (below).
@@ -436,31 +436,115 @@ long compile the viewer would have to recover from `webglcontextlost`; worth a t
 
 #### Where it stopped
 
-Part A is complete. Next: part B, once the bucket exists.
+Part A is complete (merged). Part B followed.
 
-### B: hosting on Cloudflare R2 (after the bucket exists)
+### B: hosting on Cloudflare R2 (branch `phase-3b-upload`)
 
-Not started. What it needs (the layout is in [asset format: hosting](asset-format.md#hosting-phase-3)):
+Status: **done, in review**. Measurements in `C:\cs2-data\reference\compare\p3b\`.
 
-- **What goes up**: `node pipeline\hosting.mjs` lists it (`C:\cs2-data\extracted\work\hosting\manifest.json`: each
-  file's key, source, size, SHA-256). The first upload is **2,401 files, 746.7 MB** (WebP only; the 1.3 GB of PNG stays
-  local), plus the viewer app itself wherever Combo Skin serves it.
-- **A publish step** (to write): copy each file to its key (`g/<game path>.<hash>.<ext>`, `r/<release>/…`), rewriting
-  the JSON's game paths to their `g/` keys; and in the viewer a game-file base next to `VITE_ASSET_BASE` (today both
-  hang off one base: `extracted/viewer/`, `extracted/game/`).
-- **The tool** (to approve, none is installed): **rclone** (recommended: one binary from rclone's official releases,
-  Cloudflare documents it for R2's S3 API, `rclone copy` skips what's there, sets `Cache-Control` and content types on
-  upload); or the AWS CLI (`aws s3 sync` against R2's endpoint); or a Node script on the S3 API (`@aws-sdk/client-s3`, a
-  package to add); `wrangler r2 object put` works one file per call and doesn't sync, too slow for 2,400 files. Needs an
-  R2 API token scoped to the bucket (kept out of git: `.env` is ignored).
-- **Updates upload only what changed**: `g/` names are content hashes, so after a CS2 update a changed file has a new
-  key and an unchanged one the same key; upload the manifest's keys the bucket doesn't have (keep the last uploaded
-  manifest, or list the bucket), then the new release folder (about 34 MB: data 12.2, shaders 19.7, maps 2.1; the same
-  release, and nothing to upload, when nothing changed). Deploy the viewer pointing at the new release last.
-- **Bucket settings**: a custom domain (r2.dev URLs aren't cached by the CDN and are rate-limited), CORS allowing Combo
-  Skin's origin (GET, HEAD), `Cache-Control: public, max-age=31536000, immutable` on every object. Storage 0.75 GB is in
-  R2's free tier; egress is free.
-- **Old files**: keep a few releases; delete `g/` keys no kept release names.
+- [x] rclone v1.75.2 in `C:\dev\tools` (checked against rclone.org's `SHA256SUMS` and its signature); the R2 token
+  (Object Read & Write on `combo-skin-assets` only) and the rclone remote `combo-r2` made by hand, the config
+  password-protected ([pipeline README: upload](../pipeline/README.md#upload)).
+- [x] The publish step: `hosting.mjs` stages the bucket (`work\hosting\publish\`), the release's JSON rewritten to name
+  game files by their `g/` keys; the release is a hash of the files as published (`3de0d6e58111`).
+- [x] The viewer's hosted layout (`viewer/src/lib/asset-layout.ts`) and the pointer (below).
+- [x] The upload (`pipeline\upload.mjs`): **2,402 files, 746,794,934 bytes** (the manifest's 2,401 and `release.json`),
+  in 5 min; the bucket then held exactly the manifest (count, sizes, MD5s).
+- [x] Headers, CORS, edge cache, cold loads from R2, every item checked from R2 (below).
+- [x] The update command, and its run with nothing changed: nothing sent, 4 s.
+
+#### How the viewer finds the release
+
+A pointer, `https://assets.combo.skin/release.json` (`{"release":"3de0d6e58111"}`, `Cache-Control: public,
+max-age=60`), read once when the viewer starts, rather than the release baked into the build: after a CS2 update the
+upload alone moves every page to the new release within a minute, with no viewer deploy, and pages already open keep
+theirs (old releases stay). It costs one small request before the catalog. A build can still pin one
+(`VITE_ASSET_RELEASE=<release>`): for a viewer change that needs new data (deploy that viewer pinned, then upload, then
+unpin), or for the screenshot worker, so a shot names the release it was taken with. The pointer is uploaded last, so it
+never names a release whose files aren't all there. Details in [asset format: hosting](asset-format.md#hosting-phase-3).
+
+Viewer changes: `VIEWER_DATA` and `GAME_ROOT` come from `asset-layout.ts` (a top-level await: every module that loads
+assets waits for the release); the few places that matched model file names (the knife's own animation track, the
+glove model's arm skeleton) compare game paths without the hash; the hard-coded `extracted/viewer/` paths go through
+`VIEWER_DATA`; the map's sky loads its EXR first (it asked for a `.hdr` no build writes: a 404 on every load).
+
+#### Checks
+
+- **Bucket against the manifest**: 2,402 objects, 746,794,934 bytes, every key with the manifest's size and MD5
+  (`upload.mjs` checks this after every upload).
+- **Headers** (one file of each kind, `Origin: https://view.combo.skin`): all 200, `Content-Type` `image/webp`,
+  `model/gltf-binary`, `image/x-exr`, `application/json`, `text/plain; charset=utf-8`; `Cache-Control: public,
+  max-age=31536000, immutable` (`release.json`: `public, max-age=60`); `Access-Control-Allow-Origin` echoing the origin.
+- **CORS**: `https://combo.skin`, `http://127.0.0.1:5321`, `http://localhost:5320` allowed; another origin gets no
+  header; the preflight answers 204 with `GET, HEAD`. A missing key is a 404; TLS 1.1 is refused.
+- **Edge cache** (`cf-cache-status`, each file fetched twice): `.webp` MISS then HIT (Cloudflare caches it by default);
+  `.glb`, `.exr`, `.json`, `.glsl` and `release.json` DYNAMIC both times, not cached at the edge, at the time of the
+  checks (2026-11-06): they need the cache rule for `assets.combo.skin` being added in the dashboard. Check again with
+  two fetches of one file per kind; the second should say HIT (`release.json` HIT or EXPIRED). Until then those come
+  from R2 on every request (still correct, a little slower; the browser caches them all the same).
+- **Cold loads from R2** (the production build with `VITE_ASSET_BASE=https://assets.combo.skin` on `vite preview`,
+  headless Chrome with a new profile and the cache disabled, `C:\cs2-data\tools\loadtime-r2.mjs`; the time the embed
+  posts `cs3d:loaded`; no failed request, CORS error or console error in any):
+
+  | Combo | Loaded | Network quiet | Downloaded | Requests |
+  | --- | ---: | ---: | ---: | ---: |
+  | Reference (Karambit \| Doppler (Ruby), Specialist \| Crimson Kimono, Ricksaw), first load after the upload (edge cold) | 5.4 s | 3.4 s | 33.8 MB | 70 |
+  | Reference, edge warm (three runs) | 4.3–4.6 s | 1.8–1.9 s | 33.8 MB | 69 |
+  | v2 glove (Specialist \| Big Swell, with the Ruby Karambit) | 18.5 s | 5.4 s | 32.2 MB | 75 |
+  | Vanilla knife (Butterfly Knife, Specialist \| Crimson Kimono) | 4.1 s | 1.8 s | 32.6 MB | 64 |
+  | Another agent (Bloody Darryl The Strapped, the agent's own gloves, the Ruby Karambit) | 2.8 s | 2.8 s | 27.5 MB | 49 |
+
+  Part C measured the reference at 4.0 s from the local disk; from R2 on this connection the bytes are in within about
+  2 s and the rest is the same shader compiles and compositing. The v2 glove is its slow compile (part A, above). The
+  one request without a CORS header is the background, shown as a plain image, not a texture.
+- **Every item from R2** (`node pipeline\check.mjs --out p3b --assets https://assets.combo.skin/`, the R2 build on
+  `vite preview`): **all 753 pass** (576 knife finishes, 94 glove finishes, 20
+  knives in first person, 63 agents; average warm loads 1.0, 1.9, 1.5 and 1.2 s), no failed request, CORS error or
+  console error; the first-person sheet matches part A's. The local layout still passes too (`--out p3b-local`, the 20
+  knives in first person and the Motorcycle Gloves, which have their own arm skeleton).
+
+#### The update command
+
+After a CS2 update: recopy the VPKs, then the build, `compress.mjs` and `hosting.mjs`, then
+`node pipeline\upload.mjs --dry-run` and `node pipeline\upload.mjs` ([pipeline README: upload](../pipeline/README.md#upload)).
+It lists the bucket (2 s), sends only the manifest's keys the bucket lacks (changed game files have a new hash, the new
+release has a new folder), the pointer last, prints what it sent by folder and by header, and checks the bucket against
+the manifest. Only `rclone copy` with `--immutable` (the pointer apart): nothing is deleted or replaced. Run with nothing
+changed: `hosting.mjs` stages nothing, `upload.mjs` "to send: 0 files", "nothing to send: the bucket already has this
+release", in 4 s. (Listing the bucket with dates took 3 minutes, a request per object: it lists without them.)
+
+#### Left
+
+- **Old releases and game files** stay in the bucket; nothing removes them yet. When there are a few releases: list the
+  `g/` keys no kept release names and delete them with your approval (a separate step, not written).
+- The agents' third-person bodies aren't hosted (63 models; the hosted viewer has no agent view). Host them if the agent
+  view is wanted on the site.
+- The weapon grunge and wear, the gloves' textiles and the agents' arms are shared between combos: a visitor's second
+  combo with the same gloves or agent downloads only what differs (immutable caching).
+
+#### Where it stopped
+
+Part B is complete. Next: phase 4, the embed on combo.skin (notes below).
+
+## Phase 4 notes (from phase 3)
+
+- **The viewer's address**: CORS on the bucket allows `https://view.combo.skin` and `https://combo.skin` (and the local
+  dev and preview ports). Build the deployed viewer with `VITE_ASSET_BASE=https://assets.combo.skin`; it then follows
+  `release.json`. The embed could report its release in `cs3d:ready`, so a page (and a screenshot) knows which data it
+  showed.
+- **WebGL context loss**: part A's shader check lost its WebGL context after an 8.8 s cold compile (weapon combo 5), and
+  every later compile failed with an empty log until a new context was made; the v2 glove's combo 7 takes 4.5 s cold on
+  this PC, longer on slower GPUs. The embed and the screenshot worker must recover from it: listen for
+  `webglcontextlost` on the canvas (call `preventDefault()` so the browser may restore it), drop the GPU resources, and
+  on `webglcontextrestored` (or with a new renderer, if it doesn't come) rebuild the materials and reload the current
+  combo; post an event (for example `cs3d:error` with a reason) so the host page can show the combo's screenshot
+  instead. The screenshot worker should retry a shot whose context was lost in a fresh page. To test: a slow machine,
+  or `WEBGL_lose_context`'s `loseContext()` from the console.
+- **First load**: about 33 MB per combo from R2, 4 to 5 s on this PC and connection (part C: 9.8 s at 50 Mbit/s,
+  32 s at 10 Mbit/s); later combos with the same gloves or agent fetch only what differs. A page should load 3D only
+  when asked, as planned.
+- **Edge caching** of `.json`, `.glsl`, `.glb` and `.exr` depends on the cache rule for `assets.combo.skin` (Cloudflare
+  caches `.webp` by default, not those): see part B's checks.
 
 ## Phase 3 notes (from phase 2)
 
