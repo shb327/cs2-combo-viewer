@@ -2,6 +2,8 @@
 // and a coverage report. Needs the viewer running (production build: cd viewer; npm.cmd run build; npm.cmd run preview).
 //
 //   node check.mjs [--base http://127.0.0.1:5321] [--only knives|gloves|agents|fp] [--item <item>] [--redo] [--sheets] [--shaders]
+//                  [--out <name>] [--assets <url>]  (another run's folder and results, and where its assets come from:
+//                  e.g. --out p3b --assets https://assets.combo.skin/ for the build on the hosted assets)
 //
 // Each item loads in the embed on a transparent background; it passes when the embed posts cs3d:loaded, no error,
 // exception, shader error or failed asset request was logged, and the render is neither missing (almost no covered
@@ -19,7 +21,8 @@ import { EXTRACTED, REFERENCE, VIEWER_DATA, insideRoot, parseArgs } from './lib/
 
 const args = parseArgs(process.argv.slice(2))
 const BASE = args.base ?? 'http://127.0.0.1:5321'
-const OUT = insideRoot(path.dirname(REFERENCE), path.join(REFERENCE, 'compare', 'p3'))
+const RUN = typeof args.out === 'string' ? args.out.replace(/[^\w-]/g, '') : 'p3'
+const OUT = insideRoot(path.dirname(REFERENCE), path.join(REFERENCE, 'compare', RUN))
 const WORK = path.join(EXTRACTED, 'work', 'check')
 const SHOTS = path.join(OUT, 'shots')
 mkdirSync(SHOTS, { recursive: true })
@@ -28,7 +31,10 @@ const CHROME = process.env.CHROME ?? 'C:/Program Files/Google/Chrome/Application
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const index = readJson(path.join(VIEWER_DATA, 'index.json'))
 const agentIndex = readJson(path.join(VIEWER_DATA, 'agents.json'))
-const resultsFile = path.join(WORK, 'results.json')
+const resultsFile = path.join(WORK, RUN === 'p3' ? 'results.json' : `results-${RUN}.json`)
+/** Asset requests (their failures count), and the part of their URL a report leaves out. */
+const ASSET_URL = typeof args.assets === 'string' ? new RegExp('^' + args.assets.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')) : /^.*\/assets\//
+const isAsset = (url) => ASSET_URL.test(url ?? '')
 const results = existsSync(resultsFile) && !args.redo ? readJson(resultsFile) : {}
 
 // ── The checks ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -138,8 +144,8 @@ async function runJob({ send, listeners }, job) {
     }
     if (m.method === 'Runtime.exceptionThrown') r.exceptions.push(String(p.exceptionDetails.exception?.description ?? p.exceptionDetails.text).slice(0, 300))
     if (m.method === 'Network.requestWillBeSent') reqs.set(p.requestId, p.request.url)
-    if (m.method === 'Network.responseReceived' && p.response.status >= 400 && /\/assets\//.test(p.response.url)) r.failedRequests.push(`${p.response.status} ${p.response.url.replace(/^.*\/assets\//, '')}`)
-    if (m.method === 'Network.loadingFailed' && /\/assets\//.test(reqs.get(p.requestId) ?? '') && !p.canceled) r.failedRequests.push(`${p.errorText} ${reqs.get(p.requestId).replace(/^.*\/assets\//, '')}`)
+    if (m.method === 'Network.responseReceived' && p.response.status >= 400 && isAsset(p.response.url)) r.failedRequests.push(`${p.response.status} ${p.response.url.replace(ASSET_URL, '')}`)
+    if (m.method === 'Network.loadingFailed' && isAsset(reqs.get(p.requestId)) && !p.canceled) r.failedRequests.push(`${p.errorText}${p.corsErrorStatus ? ' (CORS ' + p.corsErrorStatus.corsError + ')' : ''} ${reqs.get(p.requestId).replace(ASSET_URL, '')}`)
   }
   listeners.add(l)
   const [w, h] = job.size
