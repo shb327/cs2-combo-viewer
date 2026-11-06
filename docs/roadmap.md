@@ -7,7 +7,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
 | 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B, C done; D in review |
-| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
+| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | A in review |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
@@ -308,15 +308,15 @@ Cloudflare R2 (after the bucket exists).
 
 ### A: build everything, locally (branch `phase-3a-coverage`)
 
-Status: **in progress** (this list is kept current so a new session can pick up).
+Status: **done, in review**. Images and reports in `C:\cs2-data\reference\compare\p3\`.
 
 - [x] Incremental build (below).
 - [x] The build list from Combo Skin's catalog (below).
 - [x] Full build and `compress.mjs`.
-- [ ] Automated check of every item, contact sheets, coverage report.
-- [ ] Spot checks against the game's item images.
-- [ ] Hosting layout and totals in `docs/asset-format.md`.
-- [ ] The v2 glove's slow first render.
+- [x] Automated check of every item and shader, contact sheets, coverage report (below).
+- [x] Spot checks against the game's item images (below).
+- [x] Hosting layout and totals in [`docs/asset-format.md`](asset-format.md#hosting-phase-3).
+- [x] The v2 glove's slow first render: cause found, not fixed (below).
 
 #### What to build: the catalog
 
@@ -355,13 +355,88 @@ change the pinned commit.
 
 | Run | build.mjs | compress.mjs |
 | --- | --- | --- |
-| Full (empty cache) | 2 min 33 s (1,149 files decoded) | 3 min 47 s (856 textures, 1,344 MB PNG → 639 MB WebP) |
+| Full (empty cache) | about 3 min (2 min 33 s for 1,149 files, after a subset build had decoded 325 in 27 s) | 3 min 47 s (856 textures, 1,344 MB PNG → 639 MB WebP) |
 | Nothing changed | 3.5 s, nothing decoded or written | 0.2 s, nothing encoded or written |
+
+A full build is about 7 minutes; the checks below take another 25.
+
+#### Checks
+
+`node pipeline\check.mjs` (the production build on `vite preview`, port 5321) loads every item in the embed in headless
+Chrome on a transparent background and takes the embed's own screenshot (`cs3d:screenshot`). A finish passes when the
+embed posts `cs3d:loaded`, nothing logs an error, exception or shader error, no asset request fails, and the render
+isn't missing, black, white or flat. Knife and glove finishes are seen in the orbit view (seed 1, float 0.05); each knife
+in first person (its idle, Specialist Gloves | Crimson Kimono); each agent's arms in first person (its own gloves, a
+vanilla Karambit). `--shaders` compiles and links every compositing shader as the viewer would.
+
+| Kind | Catalog | Built | Passed | Problems | Average load (warm cache) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Knife finishes (20 knives) | 576 | 576 | 576 | 0 | 1.0 s |
+| Glove finishes (8 gloves) | 94 | 94 | 94 | 0 | 1.1 s |
+| Agents (first-person arms) | 63 | 63 | 63 | 0 | 1.1 s |
+| Knives in first person | 20 | 20 | 20 | 0 | 1.6 s |
+| Compositing shaders | | 1,158 | 1,158 | 0 | |
+
+Contact sheets (one per item type, PNG and HTML; `index.html` lists them) and `coverage.md` (built, failed and why, the
+catalog against the game files) are in `C:\cs2-data\reference\compare\p3\`. Looked through: every knife sits in the
+right hand in its own idle (Karambit and Talon reverse grip, the Shadow Daggers one per hand); each agent shows its own
+sleeves and skin. Found and fixed on the way: the weapon composite fetched `texture_channels.json`, which no build
+writes (a 404 on every knife), only to ignore it. The first shader run lost its WebGL context after an 8.8 s cold
+compile and every later shader failed with an empty log; the check now takes a new context, and all 1,158 pass.
+
+#### Spot checks against the game's item images
+
+The game's own item images (`panorama/images/econ/default_generated/<item>_<kit>_light_png`, the pictures Steam shows,
+and `econ/characters/<agent>_png`) come from the copies, so Steam wasn't needed. Side by sides are in
+`C:\cs2-data\reference\compare\p3\spot\` (`spot-knives.png`, `spot-gloves.png`, `spot-agents.png`; the game on the left,
+the viewer on the right, knives tilted and seen from the back as in the game's).
+
+- **Knives**, one finish each, picked to cover many paint styles (Fade, Marble Fade, Tiger Tooth, Oiled, Urban Masked,
+  Crimson Web, Ruby, Emerald, Doppler Phase 1 and 2 and the Talon's own Phase 1, Black Pearl, Scorched, Forest DDPAT,
+  Night, Blued Steel, Forced, Ultraviolet, Boreal Forest, Safari Mesh): every one has the right pattern, colours and
+  painted parts on the right model. What differs is light: the game's pictures use a bright, reflective rig, so the
+  viewer's studio renders are darker and less saturated, metals most (Scorched on the Karambit is mostly dark where the
+  game shows bright steel; Blued Steel and Forced are duller; Tiger Tooth is brownish orange against bright yellow).
+  Where Oiled's pattern sits differs (the picture's seed is unknown).
+- **Gloves**, one finish per type: all 8 have the right print on the right panels at the right scale (the hand wraps'
+  camo, the motorcycle's stripe, the brocade crane, the Specialist "TORTUE" plates, the beadwork, the three studded
+  gloves' emblems). Differs: **Sport Gloves | Beadwork** (a newer glove): the game's finger panels are pearlescent
+  lilac, the viewer's dull grey-beige; likely the final glove material (cloth sheen or an iridescent layer) rather than
+  the composite. To look at. Metals (studs, the Hydra's emblem) are duller, as with the knives.
+- **Agents** (Ricksaw, Bloody Darryl The Strapped, B Squadron Officer, a Leet and a Guerrilla agent, the Diver): the
+  game's pictures are third-person portraits, so only the sleeves can be compared. The SAS camo, Ricksaw's and the
+  Guerrilla's bare forearms and Darryl's watch match; the Diver's wetsuit sleeve is near black in the viewer against
+  blue grey in the picture (the light, or the material: to look at).
+
+#### The v2 glove's slow first render
+
+Measured with `C:\cs2-data\tools\glprof.mjs` (wraps WebGL's blocking calls in the page; a fresh Chrome profile, so no
+cached programs): Big Swell loads in 12.3 s, Kimono in 3.2 s. **7.9 s of the difference is one call: linking the glove
+compositor's combo 7 program** (a 92 KB fragment shader; Kimono's combo 0 is 37 KB and links in 0.3 s). The other
+programs (the hands' and the knife's materials) take about twice as long in the Big Swell load, sharing the GPU process
+with it. Alone and cold, combo 7 compiles in 4.5 s (`compiletime.mjs`): Direct3D's shader compiler under ANGLE (Chrome
+and Edge on Windows). Chrome keeps compiled programs on disk, so a visitor pays it once.
+
+Tried, no help: rewriting the decompiled `for (;;) { if (!(i < n)) break; … }` loops (the tint-ID sampling) as
+canonical counted loops (4.5 s either way). With the output mode fixed as a constant, the albedo program alone still
+takes 3.4 s and the normal one 1.3 s. Not simple, so nothing changed. Options, roughly by effort:
+
+1. Compile combo 7 first and in the background: three.js' `compileAsync` (`KHR_parallel_shader_compile`), started as
+   soon as the glove's kit is known, before its textures; the main thread stays free and the other programs compile
+   alongside. Saves part of the contention (a few seconds), not the 4.5 s.
+2. Specialise combo 7 per kit: a finish's feature flags and tint-ID settings are constants; turning the uniforms it
+   doesn't vary into constants lets the compiler drop dead branches (each kit becomes its own program, so the disk
+   cache helps less).
+3. Find the expensive part by halving the shader (compile time against removed sections) and restructure that part.
+4. Bake the newer gloves' composites at build time (four 2048 maps per finish and seed), at a cost in size and in the
+   live seed.
+
+Also seen: a cold 8.8 s compile (combo 5) lost the WebGL context in the shader check. If a visitor's GPU resets during a
+long compile the viewer would have to recover from `webglcontextlost`; worth a test on a slow machine.
 
 #### Where it stopped
 
-(Kept current.) Built: everything in the catalog, compressed. Next: the check run (`node pipeline\check.mjs`, needs
-`vite preview` on port 5321), then the spot checks.
+Part A is complete. Next: part B, once the bucket exists.
 
 ### B: hosting on Cloudflare R2 (after the bucket exists)
 

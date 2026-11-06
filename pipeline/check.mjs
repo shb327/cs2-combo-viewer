@@ -190,9 +190,11 @@ async function checkShaders() {
     const ev = await send('Runtime.evaluate', {
       awaitPromise: true, returnByValue: true, expression: `(async () => {
         const files = ${JSON.stringify(files)}
-        const gl = document.createElement('canvas').getContext('webgl2')
+        let gl = document.createElement('canvas').getContext('webgl2')
         const results = []
         for (const f of files) {
+          // A lost context (the driver resets after a long compile) fails every later shader with an empty log: take a new one.
+          if (gl.isContextLost()) gl = document.createElement('canvas').getContext('webgl2')
           const text = (await (await fetch('/assets/extracted/viewer/shaders/' + f)).text()).replace(/\\r\\n/g, '\\n')
           const frag = text.startsWith('// combo ') ? text.slice(text.indexOf('\\n') + 1) : text
           const ins = [...frag.matchAll(/^\\s*(flat\\s+)?in\\s+(\\w+)\\s+(\\w+)\\s*;/gm)]
@@ -204,7 +206,8 @@ async function checkShaders() {
           const p = gl.createProgram(); gl.attachShader(p, v); gl.attachShader(p, fr); gl.linkProgram(p)
           const ok = gl.getProgramParameter(p, gl.LINK_STATUS)
           const ms = performance.now() - t
-          results.push({ f, ok, ms: Math.round(ms), lines: frag.split('\\n').length, log: ok ? '' : (gl.getShaderInfoLog(fr) || gl.getProgramInfoLog(p) || '').slice(0, 400) })
+          const contextLost = gl.isContextLost()
+          results.push({ f, ok, ms: Math.round(ms), lines: frag.split('\\n').length, contextLost, log: ok ? '' : (gl.getShaderInfoLog(fr) || gl.getProgramInfoLog(p) || (contextLost ? 'context lost' : '')).slice(0, 400) })
           gl.deleteProgram(p); gl.deleteShader(v); gl.deleteShader(fr)
         }
         return results
