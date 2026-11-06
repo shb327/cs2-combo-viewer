@@ -7,6 +7,8 @@ export const SOURCE = path.resolve(process.env.CS2_SOURCE ?? 'C:/cs2-data/source
 export const EXTRACTED = path.resolve(process.env.CS2_EXTRACTED ?? 'C:/cs2-data/extracted')
 /** The user's own screenshots of the game (map backgrounds, references): read only, never in git. */
 export const REFERENCE = path.resolve(process.env.CS2_REFERENCE ?? 'C:/cs2-data/reference')
+/** Combo Skin's catalog as fetched from GitHub (fetch-catalog.mjs): read only, never in git. */
+export const CATALOG = path.resolve(process.env.CS2_CATALOG ?? 'C:/cs2-data/catalog')
 /** The asset folder the viewer's dev server serves at /assets/. */
 export const WEB = path.join(EXTRACTED, 'web')
 /** The viewer's own data and the decoded game files, as the viewer addresses them (VIEWER_DATA, GAME_ROOT). */

@@ -7,6 +7,10 @@
 //   table.json            static combos, features, and every ps / vs variable (type, defaults, sRGB, expression)
 //   ps_<id>.glsl, vs_<id>.glsl   SPIR-V reflected to GLSL for static combo <id> (dynamic combo 0)
 //   combos.json           { "<id>": { "S_NAME": value, ... } } for every combo written
+//
+//   shader-dump list  --vpk <vpk> --out <file>    every game path in the VPK
+//   shader-dump index --vpk <vpk> --out <file>    the same with each file's CRC32 and length (tab separated)
+//   shader-dump extract …                         see Extract.cs
 
 using System.Text;
 using System.Text.Json;
@@ -32,6 +36,19 @@ static class Program
                 using var package = new Package();
                 package.Read(Inside(SourceRoot, l["vpk"], "--vpk"));
                 var lines = package.Entries!.Values.SelectMany(x => x).Select(e => e.GetFullPath()).OrderBy(x => x, StringComparer.Ordinal);
+                Write(Inside(OutputRoot, l["out"], "--out"), string.Join("\n", lines) + "\n");
+                return 0;
+            }
+            if (args.Length > 0 && args[0] == "index")
+            {
+                // Every file in the VPK with the CRC32 and length its directory stores: "<game path>\t<crc32 hex>\t<bytes>".
+                // A file whose CRC changed after a game update is a file that changed (the build's incremental key).
+                var l = ParseArgs(args[1..], ["vpk", "out"]);
+                using var package = new Package();
+                package.Read(Inside(SourceRoot, l["vpk"], "--vpk"));
+                var lines = package.Entries!.Values.SelectMany(x => x)
+                    .Select(e => $"{e.GetFullPath()}\t{e.CRC32:x8}\t{e.TotalLength}")
+                    .OrderBy(x => x, StringComparer.Ordinal);
                 Write(Inside(OutputRoot, l["out"], "--out"), string.Join("\n", lines) + "\n");
                 return 0;
             }

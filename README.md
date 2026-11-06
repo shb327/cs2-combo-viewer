@@ -4,7 +4,7 @@ A browser 3D viewer for Counter-Strike 2 knife and glove combinations: a skinned
 
 It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site for finding good-looking glove and knife combos, where every combo page will offer a 3D view next to its screenshot.
 
-**Status:** phase 1 done: a Karambit in Specialist Gloves, first person, built from the game files by our own pipeline. Phase 2 (that combo matching the game): parts A (the gloves on a Vertigo background), B (the hands and the knife) and C (framing and smaller downloads: 34.6 MB per combo, was 82.4) are done; part D (real names, the newer gloves, the last weapon shader combos, a faster first frame and Combo Skin's look) is in review. See the [roadmap](docs/roadmap.md).
+**Status:** phases 1 and 2 done: Karambit | Doppler (Ruby) in Specialist Gloves | Crimson Kimono on Ricksaw's arms, matching the game, built from the game files by our own pipeline. Phase 3 (coverage): part A, every knife, glove and agent in Combo Skin's catalog built and checked (576 knife finishes, 94 glove finishes, 63 agents), is in review; part B (hosting) comes next. See the [roadmap](docs/roadmap.md).
 
 ## Layout
 

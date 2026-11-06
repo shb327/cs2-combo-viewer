@@ -6,8 +6,8 @@ Each phase ends with something that runs. Later phases are rough and will change
 | --- | --- | --- |
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
-| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | A, B, C done; D in review |
-| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting | |
+| 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | Done |
+| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | A in review |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
@@ -299,6 +299,168 @@ Left (D):
 
 - An in-game screenshot of a v2 glove (Big Swell, a known seed) to check its seed placement and colour.
 - Building the glove inspect clips (`pedestal_gloves_*` are in the game) and the attack clips.
+
+## Phase 3: parts
+
+Phase 3 is coverage: every knife, glove and agent Combo Skin can show, built and checked, so the PC is only needed when
+CS2 adds items. Two parts, one branch and pull request each: A builds and checks everything locally; B uploads it to
+Cloudflare R2 (after the bucket exists).
+
+### A: build everything, locally (branch `phase-3a-coverage`)
+
+Status: **done, in review**. Images and reports in `C:\cs2-data\reference\compare\p3\`.
+
+- [x] Incremental build (below).
+- [x] The build list from Combo Skin's catalog (below).
+- [x] Full build and `compress.mjs`.
+- [x] Automated check of every item and shader, contact sheets, coverage report (below).
+- [x] Spot checks against the game's item images (below).
+- [x] Hosting layout and totals in [`docs/asset-format.md`](asset-format.md#hosting-phase-3).
+- [x] The v2 glove's slow first render: cause found, not fixed (below).
+
+#### What to build: the catalog
+
+`pipeline/items.json` pins the catalog (ByMykel/CSGO-API `public/api/en/skins.json` and `agents.json` at commit
+`cbe5eec1854bf882bf1d79d8d5fd2aac7d80e5bc`); `node pipeline/fetch-catalog.mjs` fetches them once into
+`C:\cs2-data\catalog\cbe5eec\` (outside git). `pipeline/lib/catalog.mjs` turns them into the build list: knives and gloves
+by item definition index (`weapon.weapon_id`) and paint index (Doppler and Gamma Doppler phases have their own), agents
+by item definition index (`def_index`), each resolved against `items_game`. Nothing is typed by hand; to follow the site,
+change the pinned commit.
+
+- Knives: 20 types, 576 finishes, of which 20 vanilla (no paint index: built as the `vanilla` finish, paint index 0, the
+  model's own materials, the viewer's `bare` style; the viewer labels it "Vanilla").
+- Gloves: 8 types, 94 finishes (72 classic, 22 newer).
+- Agents: 63, every agent in the catalog. `items_game` has 141 `customplayer_*` items: the other 78 are all "Default T
+  Agent" / "Default CT Agent" entries (map-based defaults on 16 models), which the site can't show; they're listed in the
+  build report, not built.
+- Every catalog entry resolves (no unknown item or paint index), and the game has no knife or glove finish with an item
+  image (`panorama/images/econ/default_generated/<item>_<kit>_light_png`) that the catalog lacks: the two agree.
+- Each knife's first-person clips are found from its model's folder (`weapons/models/knife/knife_m9/…` →
+  `animation/anims/viewmodel/knife/knife_m9/idle1_m9`, `lookat01_m9`), so every knife has its idle and inspect.
+
+#### Incremental build
+
+- `shader-dump index` lists pak01 with each file's CRC32 (from the VPK's directory, 0.5 s for 137,844 files). The build
+  reads it every run (`work/pak01_index.txt`, rewritten only when the copy changed).
+- Every extraction job is cached in `work/cache/extract.json` under a key of the job, the source file's CRC32 (with the
+  model's folder for models, the skeletons for clips) and a hash of the tool's binaries; a job whose key is unchanged and
+  whose output exists isn't run. Every JSON and GLB is written only when its bytes change.
+- `compress.mjs` keeps `work/compress/manifest.json` (each PNG's size, date, SHA-1, mode): a PNG with the same content is
+  never re-encoded, even when extracted again.
+- **How to tell what changed** after a CS2 update (recopy the VPKs first, see `C:\cs2-data\VERSION.md`), from
+  `C:\cs2-data\extracted\work\`: `changes.json` (written by the last build that changed anything) has `source` (pak01
+  files added, changed, removed by CRC since the previous build), `redone` (the files decoded again, and why: new,
+  source changed, output missing) and `rewritten` (viewer files whose bytes changed); `compress/encoded.json` the
+  textures the last compress re-encoded; `build-report.json` what was built, what failed and the catalog comparison.
+
+| Run | build.mjs | compress.mjs |
+| --- | --- | --- |
+| Full (empty cache) | about 3 min (2 min 33 s for 1,149 files, after a subset build had decoded 325 in 27 s) | 3 min 47 s (856 textures, 1,344 MB PNG → 639 MB WebP) |
+| Nothing changed | 3.5 s, nothing decoded or written | 0.2 s, nothing encoded or written |
+
+A full build is about 7 minutes; the checks below take another 25.
+
+#### Checks
+
+`node pipeline\check.mjs` (the production build on `vite preview`, port 5321) loads every item in the embed in headless
+Chrome on a transparent background and takes the embed's own screenshot (`cs3d:screenshot`). A finish passes when the
+embed posts `cs3d:loaded`, nothing logs an error, exception or shader error, no asset request fails, and the render
+isn't missing, black, white or flat. Knife and glove finishes are seen in the orbit view (seed 1, float 0.05); each knife
+in first person (its idle, Specialist Gloves | Crimson Kimono); each agent's arms in first person (its own gloves, a
+vanilla Karambit). `--shaders` compiles and links every compositing shader as the viewer would.
+
+| Kind | Catalog | Built | Passed | Problems | Average load (warm cache) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Knife finishes (20 knives) | 576 | 576 | 576 | 0 | 1.0 s |
+| Glove finishes (8 gloves) | 94 | 94 | 94 | 0 | 1.1 s |
+| Agents (first-person arms) | 63 | 63 | 63 | 0 | 1.1 s |
+| Knives in first person | 20 | 20 | 20 | 0 | 1.6 s |
+| Compositing shaders | | 1,158 | 1,158 | 0 | |
+
+Contact sheets (one per item type, PNG and HTML; `index.html` lists them) and `coverage.md` (built, failed and why, the
+catalog against the game files) are in `C:\cs2-data\reference\compare\p3\`. Looked through: every knife sits in the
+right hand in its own idle (Karambit and Talon reverse grip, the Shadow Daggers one per hand); each agent shows its own
+sleeves and skin. Found and fixed on the way: the weapon composite fetched `texture_channels.json`, which no build
+writes (a 404 on every knife), only to ignore it. The first shader run lost its WebGL context after an 8.8 s cold
+compile and every later shader failed with an empty log; the check now takes a new context, and all 1,158 pass.
+
+#### Spot checks against the game's item images
+
+The game's own item images (`panorama/images/econ/default_generated/<item>_<kit>_light_png`, the pictures Steam shows,
+and `econ/characters/<agent>_png`) come from the copies, so Steam wasn't needed. Side by sides are in
+`C:\cs2-data\reference\compare\p3\spot\` (`spot-knives.png`, `spot-gloves.png`, `spot-agents.png`; the game on the left,
+the viewer on the right, knives tilted and seen from the back as in the game's).
+
+- **Knives**, one finish each, picked to cover many paint styles (Fade, Marble Fade, Tiger Tooth, Oiled, Urban Masked,
+  Crimson Web, Ruby, Emerald, Doppler Phase 1 and 2 and the Talon's own Phase 1, Black Pearl, Scorched, Forest DDPAT,
+  Night, Blued Steel, Forced, Ultraviolet, Boreal Forest, Safari Mesh): every one has the right pattern, colours and
+  painted parts on the right model. What differs is light: the game's pictures use a bright, reflective rig, so the
+  viewer's studio renders are darker and less saturated, metals most (Scorched on the Karambit is mostly dark where the
+  game shows bright steel; Blued Steel and Forced are duller; Tiger Tooth is brownish orange against bright yellow).
+  Where Oiled's pattern sits differs (the picture's seed is unknown).
+- **Gloves**, one finish per type: all 8 have the right print on the right panels at the right scale (the hand wraps'
+  camo, the motorcycle's stripe, the brocade crane, the Specialist "TORTUE" plates, the beadwork, the three studded
+  gloves' emblems). Differs: **Sport Gloves | Beadwork** (a newer glove): the game's finger panels are pearlescent
+  lilac, the viewer's dull grey-beige; likely the final glove material (cloth sheen or an iridescent layer) rather than
+  the composite. To look at. Metals (studs, the Hydra's emblem) are duller, as with the knives.
+- **Agents** (Ricksaw, Bloody Darryl The Strapped, B Squadron Officer, a Leet and a Guerrilla agent, the Diver): the
+  game's pictures are third-person portraits, so only the sleeves can be compared. The SAS camo, Ricksaw's and the
+  Guerrilla's bare forearms and Darryl's watch match; the Diver's wetsuit sleeve is near black in the viewer against
+  blue grey in the picture (the light, or the material: to look at).
+
+#### The v2 glove's slow first render
+
+Measured with `C:\cs2-data\tools\glprof.mjs` (wraps WebGL's blocking calls in the page; a fresh Chrome profile, so no
+cached programs): Big Swell loads in 12.3 s, Kimono in 3.2 s. **7.9 s of the difference is one call: linking the glove
+compositor's combo 7 program** (a 92 KB fragment shader; Kimono's combo 0 is 37 KB and links in 0.3 s). The other
+programs (the hands' and the knife's materials) take about twice as long in the Big Swell load, sharing the GPU process
+with it. Alone and cold, combo 7 compiles in 4.5 s (`compiletime.mjs`): Direct3D's shader compiler under ANGLE (Chrome
+and Edge on Windows). Chrome keeps compiled programs on disk, so a visitor pays it once.
+
+Tried, no help: rewriting the decompiled `for (;;) { if (!(i < n)) break; … }` loops (the tint-ID sampling) as
+canonical counted loops (4.5 s either way). With the output mode fixed as a constant, the albedo program alone still
+takes 3.4 s and the normal one 1.3 s. Not simple, so nothing changed. Options, roughly by effort:
+
+1. Compile combo 7 first and in the background: three.js' `compileAsync` (`KHR_parallel_shader_compile`), started as
+   soon as the glove's kit is known, before its textures; the main thread stays free and the other programs compile
+   alongside. Saves part of the contention (a few seconds), not the 4.5 s.
+2. Specialise combo 7 per kit: a finish's feature flags and tint-ID settings are constants; turning the uniforms it
+   doesn't vary into constants lets the compiler drop dead branches (each kit becomes its own program, so the disk
+   cache helps less).
+3. Find the expensive part by halving the shader (compile time against removed sections) and restructure that part.
+4. Bake the newer gloves' composites at build time (four 2048 maps per finish and seed), at a cost in size and in the
+   live seed.
+
+Also seen: a cold 8.8 s compile (combo 5) lost the WebGL context in the shader check. If a visitor's GPU resets during a
+long compile the viewer would have to recover from `webglcontextlost`; worth a test on a slow machine.
+
+#### Where it stopped
+
+Part A is complete. Next: part B, once the bucket exists.
+
+### B: hosting on Cloudflare R2 (after the bucket exists)
+
+Not started. What it needs (the layout is in [asset format: hosting](asset-format.md#hosting-phase-3)):
+
+- **What goes up**: `node pipeline\hosting.mjs` lists it (`C:\cs2-data\extracted\work\hosting\manifest.json`: each
+  file's key, source, size, SHA-256). The first upload is **2,401 files, 746.7 MB** (WebP only; the 1.3 GB of PNG stays
+  local), plus the viewer app itself wherever Combo Skin serves it.
+- **A publish step** (to write): copy each file to its key (`g/<game path>.<hash>.<ext>`, `r/<release>/…`), rewriting
+  the JSON's game paths to their `g/` keys; and in the viewer a game-file base next to `VITE_ASSET_BASE` (today both
+  hang off one base: `extracted/viewer/`, `extracted/game/`).
+- **The tool** (to approve, none is installed): **rclone** (recommended: one binary from rclone's official releases,
+  Cloudflare documents it for R2's S3 API, `rclone copy` skips what's there, sets `Cache-Control` and content types on
+  upload); or the AWS CLI (`aws s3 sync` against R2's endpoint); or a Node script on the S3 API (`@aws-sdk/client-s3`, a
+  package to add); `wrangler r2 object put` works one file per call and doesn't sync, too slow for 2,400 files. Needs an
+  R2 API token scoped to the bucket (kept out of git: `.env` is ignored).
+- **Updates upload only what changed**: `g/` names are content hashes, so after a CS2 update a changed file has a new
+  key and an unchanged one the same key; upload the manifest's keys the bucket doesn't have (keep the last uploaded
+  manifest, or list the bucket), then the new release folder (about 34 MB: data 12.2, shaders 19.7, maps 2.1; the same
+  release, and nothing to upload, when nothing changed). Deploy the viewer pointing at the new release last.
+- **Bucket settings**: a custom domain (r2.dev URLs aren't cached by the CDN and are rate-limited), CORS allowing Combo
+  Skin's origin (GET, HEAD), `Cache-Control: public, max-age=31536000, immutable` on every object. Storage 0.75 GB is in
+  R2's free tier; egress is free.
+- **Old files**: keep a few releases; delete `g/` keys no kept release names.
 
 ## Phase 3 notes (from phase 2)
 

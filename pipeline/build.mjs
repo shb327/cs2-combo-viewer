@@ -1,6 +1,11 @@
-// Builds the viewer's data for the items in items.json from the copied game files.
+// Builds the viewer's data for every knife, glove and agent in Combo Skin's catalog (pinned in items.json, see
+// lib/catalog.mjs) from the copied game files.
 //
-//   node build.mjs [--items items.json]
+//   node build.mjs [--items items.json] [--only <item>[,<item>…]]
+//
+// Incremental: extraction is cached by each source file's CRC32 (lib/extract.mjs) and every output is written only
+// when its bytes change, so a run with nothing changed decodes nothing and touches no file. work/changes.json lists
+// what this run found changed in the copies and what it redid; work/build-report.json what was built and what failed.
 //
 // Reads only the copies (C:/cs2-data/source, through the C# tool) and writes only under C:/cs2-data/extracted:
 //   work/                  intermediate files (model and material dumps, items_game, localization)
@@ -8,10 +13,11 @@
 //   web/extracted/viewer/  the viewer's JSON: index, items, kits, agents, first person
 // Run convert-shaders.mjs (after shader-dump) for the compositing shaders.
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { extract, PAK01, runTool } from './lib/extract.mjs'
+import { changes, extract, pakIndex, writeIfChanged } from './lib/extract.mjs'
+import { VANILLA, buildList, readCatalog } from './lib/catalog.mjs'
 import { parseKv1, parseLocalization } from './lib/kv1.mjs'
 import { filterGlb } from './lib/glb.mjs'
 import { boneHash, parseKv3 } from './lib/kv3.mjs'
@@ -21,23 +27,34 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const args = parseArgs(process.argv.slice(2))
 const config = JSON.parse(readFileSync(args.items ?? path.join(here, 'items.json'), 'utf8'))
 const WORK = path.join(EXTRACTED, 'work')
-mkdirSync(WORK, { recursive: true })
+const started = Date.now()
 
 const strip = (p) => p.replace(/_c$/, '')
 const workFile = (gamePath, ext) => path.join(WORK, 'files', strip(gamePath) + ext)
 const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'))
+const rewritten = []
 const writeJson = (rel, data) => {
   const f = insideRoot(EXTRACTED, path.join(VIEWER_DATA, rel))
-  mkdirSync(path.dirname(f), { recursive: true })
-  writeFileSync(f, JSON.stringify(data))
+  if (writeIfChanged(f, JSON.stringify(data))) rewritten.push(rel)
   return f
+}
+/** What failed, by item and finish: the build goes on without them and lists them in work/build-report.json. */
+const failures = []
+const fail = (item, kit, stage, error) => {
+  failures.push({ item, kit, stage, error: String(error?.message ?? error) })
+  console.warn(`  ${item}${kit ? ' | ' + kit : ''} (${stage}): ${error?.message ?? error}`)
 }
 
 // ── The game's file list, items_game and the localization ──────────────────────────────────────────────────────────
-const listFile = path.join(WORK, 'pak01_files.txt')
-if (!existsSync(listFile)) runTool(['list', '--vpk', PAK01, '--out', listFile])
-const FILES = new Set(readFileSync(listFile, 'utf8').split('\n').filter(Boolean))
-const findCompiled = (suffix) => [...FILES].filter((f) => f.endsWith(suffix)).map(strip)
+const { files: FILES, changed: sourceChanges } = pakIndex()
+/** The compiled vcompmats by file name (a kit's is found by its name). */
+const compmats = new Map()
+for (const f of FILES) {
+  if (!f.endsWith('.vcompmat_c')) continue
+  const base = path.posix.basename(f)
+  if (!compmats.has(base)) compmats.set(base, [])
+  compmats.get(base).push(strip(f))
+}
 
 extract([
   { kind: 'raw', path: 'scripts/items/items_game.txt', out: path.join(WORK, 'items_game.txt') },
@@ -72,47 +89,91 @@ const kitDisplayName = (kit) => {
   return phase ? `${name} (Phase ${phase})` : gem ? `${name} (${PHASES[gem]})` : name
 }
 
-// ── Round 1: models, kit composite materials, clips ────────────────────────────────────────────────────────────────
-const knives = Object.entries(config.knives).map(([name, kits]) => ({ def: itemDef(name), kits: kits.map(paintKit) }))
-const gloves = Object.entries(config.gloves).map(([name, kits]) => ({ def: itemDef(name), kits: kits.map(paintKit) }))
-const agents = config.agents.map(itemDef)
+// ── What to build: the catalog ─────────────────────────────────────────────────────────────────────────────────────
+const list = buildList(readCatalog(config.catalog), IG)
+const only = args.only ? new Set(String(args.only).split(',')) : null
+const wantItem = (name) => !only || only.has(name)
+const kitsFor = (item, names) => names.flatMap((n) => {
+  if (n === VANILLA) return [{ name: VANILLA, index: 0, rarity: null, vanilla: true }]
+  try { return [paintKit(n)] } catch (e) { fail(item, n, 'items_game', e); return [] }
+})
+let knives = Object.entries(list.knives).filter(([n]) => wantItem(n)).map(([name, kits]) => ({ def: itemDef(name), kits: kitsFor(name, kits) }))
+let gloves = Object.entries(list.gloves).filter(([n]) => wantItem(n)).map(([name, kits]) => ({ def: itemDef(name), kits: kitsFor(name, kits) }))
+let agents = list.agents.filter((n) => !only || only.has(n) || only.has('agents')).map(itemDef)
 const kitCompmat = (kit, folder) => {
-  const found = findCompiled(`/${kit.name}.vcompmat_c`).filter((f) => f.startsWith(folder))
-  if (found.length !== 1) throw new Error(`${kit.name}: ${found.length} vcompmat files under ${folder}`)
+  const found = (compmats.get(`${kit.name}.vcompmat_c`) ?? []).filter((f) => f.startsWith(folder))
+  if (found.length !== 1) throw new Error(`${found.length} vcompmat files named ${kit.name} under ${folder}`)
   return found[0]
 }
-for (const k of knives) for (const kit of k.kits) kit.compmat = kitCompmat(kit, 'weapons/paints/')
-for (const g of gloves) for (const kit of g.kits) kit.compmat = kitCompmat(kit, 'gloves/paints/')
+/** Keeps the kits `fn` doesn't throw on (the others are recorded as failures). */
+const keepKits = (groups, stage, fn) => {
+  for (const g of groups) g.kits = g.kits.filter((kit) => {
+    try { fn(kit, g); return true } catch (e) { fail(g.def.name, kit.name, stage, e); return false }
+  })
+}
+keepKits(knives, 'vcompmat', (kit) => { if (!kit.vanilla) kit.compmat = kitCompmat(kit, 'weapons/paints/') })
+keepKits(gloves, 'vcompmat', (kit) => { kit.compmat = kitCompmat(kit, 'gloves/paints/') })
 
-const models = [...knives.map((k) => k.def.model_player), ...gloves.map((g) => g.def.model_player), ...agents.map((a) => a.model_player)]
-const clipPath = (item, clip) => `animation/anims/viewmodel/knife/${item.replace(/^weapon_/, '')}/${clip}.vnmclip`
-const clips = Object.entries(config.firstPerson ?? {}).flatMap(([item, c]) => [c.idle, c.inspect].filter(Boolean).map((x) => clipPath(item, x)))
+/**
+ * Each knife's first-person clips. Its viewmodel animations sit in a folder named as its model's
+ * (weapons/models/knife/knife_m9/… → animation/anims/viewmodel/knife/knife_m9/): the first idle (idle1_<x>, else
+ * idle_<x>) and the first inspect (lookat01_<x>).
+ */
+const firstPerson = {}
+for (const { def } of knives) {
+  const folder = path.posix.basename(path.posix.dirname(def.model_player))
+  const suffix = folder.replace(/^knife_/, '')
+  const dir = `animation/anims/viewmodel/knife/${folder}/`
+  const has = (clip) => FILES.has(`${dir}${clip}.vnmclip_c`)
+  const idle = [`idle1_${suffix}`, `idle_${suffix}`].find(has)
+  const inspect = [`lookat01_${suffix}`].find(has)
+  if (!idle) { fail(def.name, null, 'clips', `no idle clip in ${dir}`); continue }
+  firstPerson[def.name] = { dir, idle, inspect }
+}
+const clipPath = (item, clip) => `${firstPerson[item].dir}${clip}.vnmclip`
+const clips = Object.entries(firstPerson).flatMap(([item, c]) => [c.idle, c.inspect].filter(Boolean).map((x) => clipPath(item, x)))
 const kvFiles = new Map()
+/** Loads KV3 files; returns the ones that failed, with their errors. */
 const loadKv = (paths, round) => {
-  const todo = paths.filter((p) => !kvFiles.has(p))
+  const todo = [...new Set(paths)].filter((p) => !kvFiles.has(p))
   const r = extract(todo.map((p) => ({ kind: 'kv', path: p, out: workFile(p, '.json') })), path.join(WORK, round))
+  const failed = new Map()
   for (const p of todo) {
     const e = r.get(p)
-    if (e?.error) throw new Error(`${p}: ${e.error}`)
+    if (!e || e.error) { failed.set(p, e?.error ?? 'not extracted'); continue }
     kvFiles.set(p, readJson(e.out))
   }
+  return failed
 }
+const models = [...new Set([...knives.map((k) => k.def.model_player), ...gloves.map((g) => g.def.model_player), ...agents.map((a) => a.model_player)])]
 {
+  const bad = new Map()
   const r = extract([
     ...models.map((m) => ({ kind: 'model', path: m, out: path.join(GAME_ROOT, m.replace(/\.vmdl$/, '.json')) })),
     ...clips.map((c) => ({ kind: 'clip', path: c, out: workFile(c, '.json') })),
   ], path.join(WORK, 'jobs-1'))
-  for (const [p, e] of r) if (e.error) throw new Error(`${p}: ${e.error}`)
+  for (const [p, e] of r) if (e.error) bad.set(p, e.error)
+  for (const [item, c] of Object.entries(firstPerson)) {
+    const clip = [c.idle, c.inspect].filter(Boolean).map((x) => clipPath(item, x)).find((p) => bad.has(p))
+    if (clip) { fail(item, null, 'clips', `${clip}: ${bad.get(clip)}`); delete firstPerson[item] }
+  }
+  const okModel = (name, m) => { if (!bad.has(m)) return true; fail(name, null, 'model', bad.get(m)); return false }
+  knives = knives.filter((k) => okModel(k.def.name, k.def.model_player) && (firstPerson[k.def.name] || false))
+  gloves = gloves.filter((g) => okModel(g.def.name, g.def.model_player))
+  agents = agents.filter((a) => okModel(a.name, a.model_player))
 }
 const modelInfo = (m) => readJson(path.join(GAME_ROOT, m.replace(/\.vmdl$/, '.json')))
-const allKits = [...knives, ...gloves].flatMap((x) => x.kits)
+const allKits = () => [...knives, ...gloves].flatMap((x) => x.kits.filter((k) => !k.vanilla))
 
 // ── Round 2: kit includes (recursive), paint materials, model materials ────────────────────────────────────────────
-loadKv(allKits.map((k) => k.compmat), 'jobs-2')
+{
+  const failed = loadKv(allKits().map((k) => k.compmat), 'jobs-2')
+  keepKits([...knives, ...gloves], 'vcompmat', (kit) => { if (!kit.vanilla && failed.has(kit.compmat)) throw new Error(`${kit.compmat}: ${failed.get(kit.compmat)}`) })
+}
 for (let depth = 0; depth < 4; depth++) {
   const includes = [...kvFiles.values()].flatMap((doc) => procedures(doc).flatMap((p) => p.m_vecCompMatIncludes ?? [])).map(strip).filter((p) => !kvFiles.has(p))
   if (!includes.length) break
-  loadKv(includes, `jobs-2-${depth}`)
+  for (const [p, e] of loadKv(includes, `jobs-2-${depth}`)) console.warn(`  include ${p}: ${e}`)
 }
 /** A vcompmat's assembly procedures, its includes' first. */
 function procedures(doc) {
@@ -120,6 +181,7 @@ function procedures(doc) {
 }
 function allProcedures(compmat) {
   const doc = kvFiles.get(compmat)
+  if (!doc) throw new Error(`${compmat} could not be read`)
   return procedures(doc).flatMap((p) => [...(p.m_vecCompMatIncludes ?? []).map(strip).flatMap(allProcedures), p])
 }
 
@@ -133,7 +195,8 @@ const loadMaterials = (paths, round) => {
     materials.set(p, readJson(e.out))
   }
 }
-for (const kit of allKits) {
+keepKits([...knives, ...gloves], 'vcompmat', (kit) => {
+  if (kit.vanilla) return
   kit.procedures = allProcedures(kit.compmat)
   kit.containers = containers(kit.procedures)
   // Classic kits name their paint as a specific material; the newer gloves as a loose resource-material variable.
@@ -143,7 +206,7 @@ for (const kit of allKits) {
   // The newer gloves' passes start from the compositor template (workshop/paintkits/templates/glove_compositor.vmat).
   const compositor = kit.containers.paint_compositor?.m_strSpecificContainerMaterial
   kit.compositor = compositor ? strip(compositor) : null
-}
+})
 /**
  * The materials to extract: every mesh of the knives and gloves; of the agents only the first-person groups (their arms),
  * unless items.json sets agentBodies (the third-person agent view needs the body's textures too).
@@ -151,7 +214,10 @@ for (const kit of allKits) {
 const agentModels = new Set(agents.map((a) => a.model_player))
 const usedMeshes = (m) => modelInfo(m).meshes.filter((me) => config.agentBodies || !agentModels.has(m) || /^firstperson/.test(me.name))
 const modelMaterials = models.flatMap((m) => usedMeshes(m).flatMap((me) => me.drawCalls.map((c) => c.material)))
-loadMaterials([...allKits.flatMap((k) => [k.paint, k.compositor].filter(Boolean)), ...modelMaterials], 'jobs-3')
+loadMaterials([...allKits().flatMap((k) => [k.paint, k.compositor].filter(Boolean)), ...modelMaterials], 'jobs-3')
+keepKits([...knives, ...gloves], 'material', (kit) => {
+  if (!kit.vanilla && !materials.has(kit.paint)) throw new Error(`paint material ${kit.paint} could not be read`)
+})
 
 // ── Round 3: the knives' composite inputs ──────────────────────────────────────────────────────────────────────────
 const compositeInputs = (mat) => (mat?.attributes?.composite_inputs ? strip(mat.attributes.composite_inputs) : null)
@@ -159,6 +225,7 @@ loadMaterials(modelMaterials.map((m) => compositeInputs(materials.get(strip(m)))
 
 // ── Round 4: textures ──────────────────────────────────────────────────────────────────────────────────────────────
 const textureFiles = new Map()
+const missingTextures = new Set()
 /** Each texture's average colour (its vtex Reflectivity), by file under GAME_ROOT: the newer gloves' TextureAverageColor. */
 const textureAverages = {}
 {
@@ -171,6 +238,7 @@ const textureAverages = {}
     if (e.reflectivity) textureAverages[textureFiles.get(p)] = e.reflectivity.map((x) => Math.round(x * 1e5) / 1e5)
   }
   const missing = [...wanted].filter((t) => !textureFiles.has(t))
+  for (const t of missing) missingTextures.add(t)
   if (missing.length) console.log(`  ${missing.length} textures not in pak01 (left out; the viewer uses neutral defaults): ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', …' : ''}`)
 }
 /** A material texture → its file under GAME_ROOT (.png or .exr), or null when it couldn't be extracted. */
@@ -390,23 +458,50 @@ for (const { def, kits } of knives) {
     name: def.name, displayName, type: 'Knife', class: def.name, glb: glbPath(def.model_player), meshes, stickerSlots: [], keychainAnchors: [],
   }))
   for (const kit of kits) {
-    const paintMat = materials.get(kit.paint)
-    const { paint, passes, materialLayers } = kitPasses(kit, paintMat)
-    const { rolls, groups } = kitRolls(kit)
-    const params = { ...paint.params }
-    for (const c of Object.values(kit.containers)) Object.assign(params, looseParams(c))
-    const data = {
-      name: kit.name, displayName: kitDisplayName(kit), index: kit.index, rarity: kit.rarity,
-      floatMin: Number(kit.wear_remap_min ?? 0), floatMax: Number(kit.wear_remap_max ?? 1),
-      legacyModel: kit.use_legacy_model === '1', shader: paintMat.shader, style: paintMat.ints.F_PAINT_STYLE ?? null,
-      params, textures: paint.textures, rolls, rollGroups: groups, passes, materialLayers,
-    }
+    let data
+    try {
+      data = kit.vanilla ? vanillaKit() : knifeKit(kit)
+    } catch (e) { fail(def.name, kit.name, 'kit', e); continue }
     written.push(writeJson(`kits/${kit.name}.json`, data))
     index.skins.push({
       item: def.name, kit: kit.name, name: data.displayName, paintIndex: kit.index, style: data.style,
       shader: data.shader, rarity: kit.rarity, floatMin: data.floatMin, floatMax: data.floatMax, render: '',
     })
   }
+}
+
+/** A knife's paint kit: the vcompmat's passes, layers and rolls over its paint material. */
+function knifeKit(kit) {
+  const paintMat = materials.get(kit.paint)
+  const { paint, passes, materialLayers } = kitPasses(kit, paintMat)
+  const { rolls, groups } = kitRolls(kit)
+  const params = { ...paint.params }
+  for (const c of Object.values(kit.containers)) Object.assign(params, looseParams(c))
+  return {
+    name: kit.name, displayName: kitDisplayName(kit), index: kit.index, rarity: kit.rarity,
+    floatMin: Number(kit.wear_remap_min ?? 0), floatMax: Number(kit.wear_remap_max ?? 1),
+    legacyModel: kit.use_legacy_model === '1', shader: paintMat.shader, style: paintMat.ints.F_PAINT_STYLE ?? null,
+    params, textures: paint.textures, rolls, rollGroups: groups, passes, materialLayers,
+  }
+}
+/**
+ * A knife without a finish (the catalog's vanilla knives): no paint kit, so the viewer draws the model's own materials
+ * (its "bare" style). Paint index 0, as inspect links give a vanilla knife.
+ */
+function vanillaKit() {
+  return {
+    name: VANILLA, displayName: 'Vanilla', index: 0, rarity: null, floatMin: 0, floatMax: 1, legacyModel: false,
+    shader: null, style: null, params: {}, textures: sharedWear(), rolls: [],
+  }
+}
+/** The weapon-wide wear and grunge every weapon finish's paint names (the bare style samples them, unpainted). */
+function sharedWear() {
+  for (const k of knives) for (const kit of k.kits) {
+    const t = materials.get(kit.paint)?.textures
+    const wear = tex(t?.g_tWear), grunge = tex(t?.g_tGrunge)
+    if (wear && grunge) return { g_tWear: wear, g_tGrunge: grunge }
+  }
+  return {}
 }
 
 const armsModels = {}
@@ -422,32 +517,35 @@ for (const { def, kits } of gloves) {
   }))
   armsModels[def.model_player] = skeleton(info)
   for (const kit of kits) {
-    const paintMat = materials.get(kit.paint)
-    const { rolls, groups } = kitRolls(kit)
-    const common = {
-      name: kit.name, displayName: kitDisplayName(kit), index: kit.index, rarity: kit.rarity,
-      // Glove kits carry no wear range of their own: the game's default for gloves.
-      floatMin: Number(kit.wear_remap_min ?? 0.06), floatMax: Number(kit.wear_remap_max ?? 0.8),
-      legacyModel: false, shader: 'csgo_customglove.vfx', style: null,
-    }
     let data
-    if (kit.compositor) {
-      // A newer (v2) glove: the vcompmat's passes over the compositor template and the paint (a csgo_customglove_preview
-      // material), the seed's roll groups with their conditions, and the flags those conditions read (bSync…).
-      const { passes, materialLayers } = kitPasses(kit, paintMat)
-      const params = {}
-      for (const c of Object.values(kit.containers)) Object.assign(params, looseParams(c))
-      data = { ...common, params, textures: {}, rolls, rollGroups: groups, passes: { g_tColor: passes.g_tColor }, materialLayers, compositor: kit.compositor }
-      for (const layer of passes.g_tColor) for (const t of Object.values(layer.textures ?? {})) averaged.add(t)
-    } else {
-      data = { ...common, shader: paintMat.shader, params: materialParams(paintMat), textures: materialTextures(paintMat, true), rolls }
-    }
+    try {
+      data = gloveKit(kit)
+    } catch (e) { fail(def.name, kit.name, 'kit', e); continue }
     written.push(writeJson(`kits/${kit.name}.json`, data))
     index.skins.push({
       item: def.name, kit: kit.name, name: data.displayName, paintIndex: kit.index, style: null,
       shader: data.shader, rarity: kit.rarity, floatMin: data.floatMin, floatMax: data.floatMax, render: '',
     })
   }
+}
+/** A glove paint kit: classic (its paint material) or newer (the vcompmat's passes over the compositor template). */
+function gloveKit(kit) {
+  const paintMat = materials.get(kit.paint)
+  const { rolls, groups } = kitRolls(kit)
+  const common = {
+    name: kit.name, displayName: kitDisplayName(kit), index: kit.index, rarity: kit.rarity,
+    // Glove kits carry no wear range of their own: the game's default for gloves.
+    floatMin: Number(kit.wear_remap_min ?? 0.06), floatMax: Number(kit.wear_remap_max ?? 0.8),
+    legacyModel: false, shader: 'csgo_customglove.vfx', style: null,
+  }
+  if (!kit.compositor) return { ...common, shader: paintMat.shader, params: materialParams(paintMat), textures: materialTextures(paintMat, true), rolls }
+  // A newer (v2) glove: the vcompmat's passes over the compositor template and the paint (a csgo_customglove_preview
+  // material), the seed's roll groups with their conditions, and the flags those conditions read (bSync…).
+  const { passes, materialLayers } = kitPasses(kit, paintMat)
+  const params = {}
+  for (const c of Object.values(kit.containers)) Object.assign(params, looseParams(c))
+  for (const layer of passes.g_tColor) for (const t of Object.values(layer.textures ?? {})) averaged.add(t)
+  return { ...common, params, textures: {}, rolls, rollGroups: groups, passes: { g_tColor: passes.g_tColor }, materialLayers, compositor: kit.compositor }
 }
 written.push(writeJson('index.json', index))
 written.push(writeJson('texture_average.json', Object.fromEntries([...averaged].sort().filter((t) => textureAverages[t]).map((t) => [t, textureAverages[t]]))))
@@ -459,7 +557,9 @@ for (const a of agents) {
   const info = modelInfo(a.model_player)
   const key = path.basename(a.model_player, '.vmdl')
   const fpGlb = glbPath(a.model_player).replace(/\.glb$/, '.fp.glb')
-  filterGlb(path.join(GAME_ROOT, glbPath(a.model_player)), insideRoot(EXTRACTED, path.join(GAME_ROOT, fpGlb)), (name) => /\.firstperson_[^.]*$/.test(name))
+  try {
+    if (filterGlb(path.join(GAME_ROOT, glbPath(a.model_player)), insideRoot(EXTRACTED, path.join(GAME_ROOT, fpGlb)), (name) => /\.firstperson_[^.]*$/.test(name))) rewritten.push(fpGlb)
+  } catch (e) { fail(a.name, null, 'first-person model', e); continue }
   agentIndex.models[key] = { glb: fpGlb, body: glbPath(a.model_player), skeleton: skeleton(info), drawCalls: meshDrawCalls(info) }
   const team = a.used_by_classes?.terrorists ? 't' : 'ct'
   agentIndex.agents.push({ id: a.name, index: a.index, name: tr(a.item_name), model: key, team, rarity: a.item_rarity ?? null })
@@ -469,7 +569,7 @@ written.push(writeJson('agents.json', agentIndex))
 // First person: the knife's pose (its idle's first frame), its inspect, its own skeleton and bind, and the glove skeletons.
 const fp = { index: {}, inspect: {}, idle: {} }
 const weaponSkeletons = {}, weaponBinds = {}
-for (const [item, c] of Object.entries(config.firstPerson ?? {})) {
+for (const [item, c] of Object.entries(firstPerson)) {
   const def = itemDef(item)
   const info = modelInfo(def.model_player)
   weaponSkeletons[glbPath(def.model_player)] = skeleton(info)
@@ -540,13 +640,61 @@ for (const { def, kits } of [...knives, ...gloves]) {
   const mats = info.meshes.flatMap((me) => me.drawCalls.map((c) => c.material))
   const ci = mats.map((m) => compositeInputs(materials.get(strip(m)))).filter(Boolean)
   report[def.name] = { model: mb(size(gameFile(glbPath(def.model_player)))), textures: mb(sumFiles(texturesOf([...mats, ...ci]))) }
-  for (const kit of kits) report[`${def.name} | ${kit.name}`] = { textures: mb(sumFiles(texturesOf([kit.paint]))) }
+  for (const kit of kits) if (!kit.vanilla) report[`${def.name} | ${kit.name}`] = { textures: mb(sumFiles(texturesOf([kit.paint]))) }
 }
 for (const a of agents) {
   const info = modelInfo(a.model_player)
   const fpMats = info.meshes.filter((me) => /^firstperson/.test(me.name)).flatMap((me) => me.drawCalls.map((c) => c.material))
   report[a.name] = { model: mb(size(gameFile(glbPath(a.model_player).replace(/\.glb$/, '.fp.glb')))), firstPersonTextures: mb(sumFiles(texturesOf(fpMats))) }
 }
-writeFileSync(path.join(WORK, 'sizes.json'), JSON.stringify(report, null, 2))
-console.log(`build: ${written.length} viewer files in ${VIEWER_DATA}`)
-console.table(report)
+writeIfChanged(path.join(WORK, 'sizes.json'), JSON.stringify(report, null, 2))
+
+// ── What was built, what failed, what changed ──────────────────────────────────────────────────────────────────────
+const built = {
+  knives: knives.map((k) => ({ item: k.def.name, defindex: k.def.index, kits: k.kits.map((x) => x.name).filter((n) => index.skins.some((s) => s.item === k.def.name && s.kit === n)) })),
+  gloves: gloves.map((g) => ({ item: g.def.name, defindex: g.def.index, kits: g.kits.map((x) => x.name).filter((n) => index.skins.some((s) => s.item === g.def.name && s.kit === n)) })),
+  agents: agentIndex.agents.map((a) => ({ item: a.id, defindex: a.index })),
+}
+/**
+ * What the game files have that the catalog doesn't: knife and glove finishes with an item image of their own
+ * (panorama/images/econ/default_generated/<item>_<kit>_light_png, the picture the game and Steam show), and agents
+ * (items_game's customplayer_* items).
+ */
+function gameOnly() {
+  const inCatalog = new Set(list.entries.filter((e) => e.item && e.kit).map((e) => `${e.item}|${e.kit}`))
+  const itemNames = [...new Set(list.entries.filter((e) => e.item && e.category !== 'Agents').map((e) => e.item))].sort((a, b) => b.length - a.length)
+  const kitNames = new Set(Object.values(IG.paint_kits).map((k) => k.name))
+  const finishes = []
+  for (const f of FILES) {
+    const m = /^panorama\/images\/econ\/default_generated\/(.+)_light_png\.vtex_c$/.exec(f)
+    if (!m) continue
+    const item = itemNames.find((n) => m[1].startsWith(n + '_'))
+    if (!item) continue
+    const kit = m[1].slice(item.length + 1)
+    if (!kitNames.has(kit)) continue
+    if (!inCatalog.has(`${item}|${kit}`)) finishes.push(`${item}|${kit}`)
+  }
+  const catalogAgents = new Set(list.agents)
+  const agentsOnly = Object.entries(IG.items).filter(([, d]) => /^customplayer_/.test(d.name ?? '') && !catalogAgents.has(d.name))
+    .map(([i, d]) => ({ item: d.name, defindex: Number(i), name: tr(d.item_name) || null, model: d.model_player ?? null }))
+  return { finishes: finishes.sort(), agents: agentsOnly }
+}
+writeIfChanged(path.join(WORK, 'build-report.json'), JSON.stringify({
+  catalog: config.catalog, partial: !!only, built, failures, gameOnly: only ? null : gameOnly(),
+  // Catalog entries the game files don't resolve, and the build list with its keys.
+  catalogProblems: list.problems, catalogEntries: list.entries,
+  missingTextures: [...missingTextures].sort(),
+}, null, 1))
+const redone = changes()
+const sourceChanged = sourceChanges && sourceChanges.added.length + sourceChanges.changed.length + sourceChanges.removed.length > 0
+// Written only by a run that found or did something: changes.json describes the last build that changed anything.
+if (redone.length || rewritten.length || sourceChanged) writeIfChanged(path.join(WORK, 'changes.json'), JSON.stringify({
+  at: new Date().toISOString(),
+  // Files of pak01 added, removed or changed (by CRC32) since the index the last build kept; null on the first build.
+  source: sourceChanges && { added: sourceChanges.added.length, removed: sourceChanges.removed.length, changed: sourceChanges.changed.length, files: [...sourceChanges.added, ...sourceChanges.changed, ...sourceChanges.removed].slice(0, 2000) },
+  redone, rewritten,
+}, null, 1))
+const skins = index.skins.length
+console.log(`build: ${Object.keys(index.items).length} items, ${skins} finishes, ${agentIndex.agents.length} agents; ${failures.length} failed`)
+console.log(`  ${redone.length} files decoded again, ${rewritten.length} of ${written.length} viewer files rewritten, ${((Date.now() - started) / 1000).toFixed(1)} s`)
+if (sourceChanged) console.log(`  pak01 since the last build: ${sourceChanges.added.length} added, ${sourceChanges.changed.length} changed, ${sourceChanges.removed.length} removed (work/changes.json)`)
