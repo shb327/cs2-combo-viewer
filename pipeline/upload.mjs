@@ -47,9 +47,9 @@ function rclone(argv, { json = false } = {}) {
   return json ? JSON.parse(r.stdout || '[]') : r
 }
 
-/** The bucket's objects: key → { bytes, md5 }. */
+/** The bucket's objects: key → { bytes, md5 }. Without dates (each would cost a request per object: minutes, not 2 s). */
 function listBucket() {
-  const list = rclone(['lsjson', REMOTE, '-R', '--files-only', '--fast-list', '--hash', '--hash-type', 'MD5'], { json: true })
+  const list = rclone(['lsjson', REMOTE, '-R', '--files-only', '--fast-list', '--no-modtime', '--no-mimetype', '--hash', '--hash-type', 'MD5'], { json: true })
   return new Map(list.map((o) => [o.Path, { bytes: o.Size, md5: o.Hashes?.md5 ?? o.Hashes?.MD5 ?? null }]))
 }
 
