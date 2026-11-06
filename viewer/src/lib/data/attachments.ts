@@ -1,3 +1,4 @@
+import { VIEWER_DATA } from '@/lib/asset-layout'
 import type { StickerDef } from '@/lib/materials/sticker'
 
 
@@ -139,8 +140,8 @@ export function loadAttachments(base: string): Promise<AttachmentIndex> {
   if (!p) {
     p = (async () => {
       const [st, ch] = await Promise.all([
-        fetch(base + 'extracted/viewer/stickers.json').then((r) => r.json()) as Promise<{ scratches: string; stickers: [string, string, string | null, string, number][] }>,
-        fetch(base + 'extracted/viewer/charms.json').then((r) => r.json()) as Promise<{ charms: CharmDef[] }>,
+        fetch(base + VIEWER_DATA + 'stickers.json').then((r) => r.json()) as Promise<{ scratches: string; stickers: [string, string, string | null, string, number][] }>,
+        fetch(base + VIEWER_DATA + 'charms.json').then((r) => r.json()) as Promise<{ charms: CharmDef[] }>,
       ])
       const stickers = st.stickers.map(([id, name, rarity, kind, index]) => ({ id, name, rarity, kind, index }))
       return {
@@ -163,7 +164,7 @@ export function loadStickerDef(base: string, id: string): Promise<StickerDef> {
   const key = base + id
   let p = stickerDefs.get(key)
   if (!p) {
-    p = fetch(base + 'extracted/viewer/stickers/' + encodeURIComponent(id) + '.json').then((r) => {
+    p = fetch(base + VIEWER_DATA + 'stickers/' + encodeURIComponent(id) + '.json').then((r) => {
       if (!r.ok) throw new Error('No sticker ' + id)
       return r.json() as Promise<StickerDef>
     })

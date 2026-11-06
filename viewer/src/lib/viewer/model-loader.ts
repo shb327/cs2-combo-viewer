@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { dataPath, gamePath } from '@/lib/asset-layout'
 import { DEFAULT_AGENT, loadAgents, type AgentModel } from '@/lib/data/agents'
 import { GAME_ROOT, VIEWER_DATA, type DrawCall } from '@/lib/data/catalog'
 import { SHARED, type GloveItem } from '@/lib/data/items'
@@ -77,7 +78,7 @@ export class ModelLoader {
     this.armsModels ??= json<Record<string, ArmsSkeleton>>(this.firstPersonBase + 'arms_models.json').catch(() => ({}))
     this.armsShared ??= json<ArmsSkeleton>(this.firstPersonBase + 'arms.json')
     return this.armsModels.then((own) => {
-      const model = glove.model.replace(/\.glb$/, '')
+      const model = gamePath(glove.model).replace(/\.glb$/, '')
       const key = Object.keys(own).find((k) => model.endsWith(k.replace(/\.vmdl$/, '')))
       return key ? own[key] : this.armsShared!
     })
@@ -234,7 +235,7 @@ export class ModelLoader {
    */
   async rigWeapon(item: WeaponItem, root: THREE.Object3D): Promise<void> {
     const skeletons = await json<Record<string, ArmsSkeleton>>(this.firstPersonBase + 'weapon_skeletons.json').catch(() => ({} as Record<string, ArmsSkeleton>))
-    const key = (this.opts.modelOverride ?? item.model).replace(/^.*?game\//, '')
+    const key = dataPath(this.opts.modelOverride ?? item.model)
     const skeleton = skeletons[key]
     if (!skeleton) return
     root.updateMatrixWorld(true)

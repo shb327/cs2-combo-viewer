@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { dataPath, VIEWER_DATA } from '@/lib/asset-layout'
 import { valveRandom, type RandomFloat } from '@/lib/data/rng'
 import type { KitRollPlan } from '@/lib/data/catalog'
 import { evalExpr, uniformValue, type CompositeTable, type ExprContext } from '@/lib/materials/composite'
@@ -39,7 +40,7 @@ export class GloveV2Finish {
 
   static async create(renderer: THREE.WebGLRenderer, base: string, inputs: GloveV2Inputs, side: 'left' | 'right',
     loadTexture: (path: string, srgb: boolean) => Promise<THREE.Texture>): Promise<GloveV2Finish> {
-    averagesPromise ??= fetch(base + 'extracted/viewer/texture_average.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+    averagesPromise ??= fetch(base + VIEWER_DATA + 'texture_average.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
     const [shader, averages] = await Promise.all([loadGloveProgram(base, v2Features(inputs.params)), averagesPromise])
     const load = async (name: string) => {
       const path = inputs.textures[name]
@@ -182,7 +183,7 @@ export class GloveV2Finish {
       feature: (i) => Number(p[table.features[i]] ?? 0),
       textureAverage: (name) => {
         const path = this.inputs.textures[name]
-        return (path && this.averages[path.replace(/^extracted\/game\//, '')]) || [0.5, 0.5, 0.5, 1]
+        return (path && this.averages[dataPath(path)]) || [0.5, 0.5, 0.5, 1]
       },
     }
   }

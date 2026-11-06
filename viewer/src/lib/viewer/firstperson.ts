@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { gamePath } from '@/lib/asset-layout'
 import { fitAffine } from '@/lib/viewer/geometry'
 
 /** A viewmodel idle pose (build_firstperson.py): bones' parent-space (translation, rotation xyzw, scale), Source units. */
@@ -423,7 +424,7 @@ export interface WeaponRig { skeleton: ArmsSkeleton; geometries: SkinnedGeometry
  */
 const ownTrack = (rig: WeaponRig, skeleton: string) => {
   const name = /([^/]+)\.vnmskel$/.exec(skeleton)?.[1]
-  return !!name && new RegExp(`_${name}\\.glb$`).test(rig.model)
+  return !!name && new RegExp(`_${name}\\.glb$`).test(gamePath(rig.model))
 }
 
 /** Poses skinned parts and the weapon they hold at one frame: bone by bone on its own track, else rigid by its bind. */

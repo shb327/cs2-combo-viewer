@@ -1,4 +1,5 @@
-export const ASSET_BASE: string = import.meta.env.VITE_ASSET_BASE ?? '/assets/'
+/** Where the assets are served from (VITE_ASSET_BASE, default this site's /assets/), always ending in "/". */
+export const ASSET_BASE: string = ((import.meta.env.VITE_ASSET_BASE as string | undefined)?.trim() || '/assets/').replace(/\/*$/, '/')
 
 
 export const DEFAULT_SKIN = { item: 'weapon_knife_karambit', kit: 'am_ruby_marbleized' } as const
