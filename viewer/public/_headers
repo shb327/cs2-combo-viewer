@@ -1,4 +1,4 @@
-# Cloudflare Pages response headers (docs/embed.md, "Headers"). vite preview sends the same ones (vite.config.ts).
+# Cloudflare Pages response headers (docs/embed.md, "Framing and headers"). vite preview sends the same ones (vite.config.ts).
 /*
   Content-Security-Policy: frame-ancestors 'self' https://combo.skin https://admin.combo.skin http://localhost:* http://127.0.0.1:*; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://assets.combo.skin; connect-src 'self' https://assets.combo.skin; media-src 'self' blob: https://assets.combo.skin; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'
   X-Content-Type-Options: nosniff

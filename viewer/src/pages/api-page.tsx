@@ -84,7 +84,7 @@ export function ApiPage() {
             <p className="mt-3 text-[12.5px] text-muted-foreground">A weapon’s charm comes only from an inspect link. Stickers and the charm can’t be changed by message yet: load another link instead (<code className="text-brand-200">cs3d:load</code> with <code className="text-brand-200">{'{ inspect }'}</code>).</p>
           </ApiSection>
 
-          <ApiSection id="to-embed" title="Messages to the embed" intro={<>Send them with <code className="text-brand-200">iframe.contentWindow.postMessage(message, '*')</code>. Any page may drive an embed it frames; replies go back to the sender only.</>}>
+          <ApiSection id="to-embed" title="Messages to the embed" intro={<>Send them with <code className="text-brand-200">iframe.contentWindow.postMessage(message, '*')</code>. Only Combo Skin's pages and local development pages may drive it (other origins are ignored); replies go back to the sender only. Combos have their own embed at <code className="text-brand-200">/combo</code> (docs/embed.md).</>}>
             <DocTable rows={COMMANDS} nameLabel="Message" />
           </ApiSection>
 
@@ -96,7 +96,7 @@ export function ApiPage() {
           <ApiSection id="notes" title="Good to know">
             <ul className="grid gap-3 md:grid-cols-2">
               {[
-                ['Framing', <>Only <code className="text-brand-200">/embed</code> may be framed (it sends <code className="text-brand-200">frame-ancestors *</code>); the rest of the site can’t be put in an iframe.</>],
+                ['Framing', <>Only combo.skin, admin.combo.skin and local development pages may frame the viewer (<code className="text-brand-200">frame-ancestors</code>).</>],
                 ['Transparent', <><code className="text-brand-200">bg=transparent</code> drops the studio backdrop: your page shows through behind the item.</>],
                 ['Example page', <>A plain HTML page driving an embed: <a className="text-brand-300 underline-offset-2 hover:underline" href="/embed-example.html">/embed-example.html</a>.</>],
               ].map(([title, body]) => (
