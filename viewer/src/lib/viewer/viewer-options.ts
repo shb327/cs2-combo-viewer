@@ -89,6 +89,14 @@ export interface Lighting {
   map: string | null
 }
 
+/**
+ * The studio's environment (three's room) at the default ambient, fitted to the game's own item images (the pictures
+ * Steam shows) over 20 knife and 8 glove finishes: its reflections at 1.5 and its diffuse fill at 1. At one strength for
+ * both (the ambient, 0.45) metals had less than half the reflection they need: Scorched and Forced came out dark,
+ * Tiger Tooth brown. The ambient setting scales both from here.
+ */
+export const STUDIO_ENVIRONMENT = { reflections: 1.5, fill: 1 }
+
 export const DEFAULT_LIGHTING: Lighting = {
   exposure: 1, key: 2, keyColor: '#ffffff', rim: 0.6, rimColor: '#ffffff', ambient: 0.45, angle: 0, orbit: false, followCamera: false, map: 'de_vertigo',
 }

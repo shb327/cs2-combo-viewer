@@ -23,7 +23,7 @@ import { MapStage } from '@/lib/viewer/map-stage'
 import { loadAgent, poseAgent, setAgentGloves, setAgentWeapon, type AgentRig } from '@/lib/viewer/agent-view'
 import { isGlove, ModelLoader, setGloveSeed, setWeaponSeed, type LoadSink } from '@/lib/viewer/model-loader'
 import { WeaponAttachments } from '@/lib/viewer/weapon-attachments'
-import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel, viewmodelVerticalFov } from '@/lib/viewer/viewer-options'
+import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, STUDIO_ENVIRONMENT, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel, viewmodelVerticalFov } from '@/lib/viewer/viewer-options'
 import { cropToContent } from '@/lib/canvas'
 import { AttachmentEditor, type EditorEvents } from '@/lib/viewer/attachment-editor'
 
@@ -192,7 +192,8 @@ export class SkinViewer {
       readableBackground: opts.readableBackground,
     }, opts.background === undefined ? 0x0b0b12 : opts.background)
     this.fixed = new FixedInspect(this.camera, this.holder, this.renderer.domElement)
-    this.scene.environmentIntensity = DEFAULT_LIGHTING.ambient
+    this.scene.environmentIntensity = STUDIO_ENVIRONMENT.reflections
+    this.fixed.setOpenEnvDiffuse(STUDIO_ENVIRONMENT.fill / STUDIO_ENVIRONMENT.reflections)
     this.scene.add(this.keyLight, this.rimLight, this.keyLight.target, this.rimLight.target, this.holder, this.fixed.probe)
     this.loader = new ModelLoader(this.renderer, new TextureSource(opts.assetBase, this.renderer), this.gltf, opts, this.loaded)
     this.attachments = new WeaponAttachments(this.renderer, this.loader, opts.assetBase, this.loaded, () => ({ item: this.item, weaponRoot: this.weaponRoot }))
@@ -495,7 +496,9 @@ export class SkinViewer {
     this.rimLight.intensity = l.rim
     this.rimLight.color.set(l.rimColor)
     const map = IS_MOBILE_DEVICE ? null : l.map ?? null
-    this.scene.environmentIntensity = map ? (l.ambient / DEFAULT_LIGHTING.ambient) * this.mapLighting.reflections : l.ambient
+    const ambient = l.ambient / DEFAULT_LIGHTING.ambient
+    this.scene.environmentIntensity = ambient * (map ? this.mapLighting.reflections : STUDIO_ENVIRONMENT.reflections)
+    this.fixed.setOpenEnvDiffuse(map ? 1 : STUDIO_ENVIRONMENT.fill / STUDIO_ENVIRONMENT.reflections)
     if (!l.orbit) this.lightSpin = 0
     this.placeLights()
     if (map !== this.map.id) void this.map.load(map)

@@ -151,6 +151,11 @@ export class FixedInspect {
    * here, where the probes' ambient cube is the diffuse light and the environment only reflects.
    */
   private readonly envDiffuse = { value: 1 }
+  /**
+   * Its value when the map's own light isn't used: 1 over a map, below 1 in the studio, whose reflections are stronger
+   * than its fill (setOpenEnvDiffuse).
+   */
+  private openEnvDiffuse = 1
   /** The ambient cube's strength (× the game's), and whether the item uses it now. */
   private ambientScale = 1
   private probeOn = false
@@ -276,7 +281,8 @@ export class FixedInspect {
     this.fpLit = !!scene3d && !!view
     if (!scene3d || !view) {
       this.setProbe(false)
-      this.envDiffuse.value = 1
+      this.envDiffuse.value = this.openEnvDiffuse
+      this.patchAdded()
       return
     }
     scene3d.useLights([], [], view.sun ?? null)
@@ -291,7 +297,18 @@ export class FixedInspect {
 
   /** Patches meshes added to the item after `enter` (a charm hung on the weapon) to drop the environment's diffuse light too. */
   patchAdded(): void {
-    if (this.gameLit && this.envDiffuse.value === 0) patchEnvDiffuse(this.holder, this.envDiffuse)
+    if (this.envDiffuse.value !== 1) patchEnvDiffuse(this.holder, this.envDiffuse)
+  }
+
+  /**
+   * How much of the environment's diffuse light the item takes when the map's own light doesn't light it (the studio,
+   * or a map without its rig): the rest of the environment only reflects.
+   */
+  setOpenEnvDiffuse(value: number): void {
+    this.openEnvDiffuse = value
+    if (this.gameLit) return
+    this.envDiffuse.value = value
+    if (value !== 1) patchEnvDiffuse(this.holder, this.envDiffuse)
   }
 
   /** Leaves the fixed inspect (the scene back to its own camera and lights); false when it wasn't on. */
@@ -299,7 +316,7 @@ export class FixedInspect {
     if (!this.drag) return false
     this.drag = null
     this.setProbe(false)
-    this.envDiffuse.value = 1
+    this.envDiffuse.value = this.openEnvDiffuse
     if (scene3d) {
       scene3d.setGameCamera(scene3d.data.camera.position, scene3d.data.camera.forward)
       scene3d.useLights(scene3d.data.lights, scene3d.data.sceneLights ?? [])

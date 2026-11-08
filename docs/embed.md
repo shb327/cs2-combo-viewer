@@ -157,6 +157,8 @@ The hosted viewer sends (`viewer/public/_headers`, Cloudflare Pages' format; `vi
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy` that
   turns off camera, microphone, location, USB and payment.
 - `Cache-Control: public, max-age=31536000, immutable` on `/assets/*` (the build's hashed scripts and styles).
+- `X-Robots-Tag: noindex` on the `*.pages.dev` address only (a host rule in `_headers`), so search engines index
+  `view.combo.skin` and not the Pages address.
 
 The assets themselves come from `https://assets.combo.skin`, whose CORS rules allow `https://view.combo.skin` (phase 3B).
 
