@@ -4,7 +4,7 @@ A browser 3D viewer for Counter-Strike 2 knife and glove combinations: a skinned
 
 It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site for finding good-looking glove and knife combos, where every combo page will offer a 3D view next to its screenshot.
 
-**Status:** phases 1 and 2 done: Karambit | Doppler (Ruby) in Specialist Gloves | Crimson Kimono on Ricksaw's arms, matching the game, built from the game files by our own pipeline. Phase 3 (coverage): part A, every knife, glove and agent in Combo Skin's catalog built and checked (576 knife finishes, 94 glove finishes, 63 agents), is done; part B, all of it hosted on Cloudflare R2 at `assets.combo.skin` with the viewer loading from there, is in review. See the [roadmap](docs/roadmap.md).
+**Status:** phases 1 to 3 done: every knife, glove and agent in Combo Skin's catalog (576 knife finishes, 94 glove finishes, 63 agents) built from the game files by our own pipeline, checked, and hosted on Cloudflare R2 at `assets.combo.skin`. Phase 4, the embed Combo Skin's "View in 3D" button opens (`/combo`, driven by `postMessage`), is in review. See the [roadmap](docs/roadmap.md).
 
 ## Layout
 
@@ -25,6 +25,7 @@ It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site
 - [Architecture](docs/architecture.md): the planned pieces and how Combo Skin talks to them.
 - [Roadmap](docs/roadmap.md): phases, from a first rendered skin to a full combo viewer.
 - [Asset format](docs/asset-format.md): the files the viewer loads.
+- [Embed](docs/embed.md): the combo embed's parameters, messages, errors and origins, for Combo Skin and the screenshot worker.
 
 ## Credits
 
