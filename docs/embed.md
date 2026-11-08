@@ -182,10 +182,16 @@ downloads about 33 MB.
 
 ## Load times
 
-Measured on 2026-11-08 with `C:\cs2-data\tools\embed-check.mjs time` (headless Chrome, a new profile, cache disabled,
-the production build with `VITE_ASSET_BASE=https://assets.combo.skin` on `vite preview`, the test page on another
-origin framing it; the time the embed posts `cs3d:loaded`, from the iframe's start). See the roadmap (phase 4) for
-the figures and the weak-device estimate.
+The reference combo, cold (a new browser profile, no cache), assets from R2, measured on 2026-11-08 through the test
+host (details in the roadmap, phase 4):
+
+| Conditions | `cs3d:ready` | `cs3d:loaded` | Downloaded |
+| --- | ---: | ---: | ---: |
+| A fast PC and connection | 0.2 s | 3.0 s | 33.8 MB |
+| CPU 4× slower and 10 Mbit/s | 0.6 s | 30.5 s | 33.8 MB |
+
+A second combo in the same iframe takes 0.6 to 1.4 s (shared files cached); a newer (v2) glove's first load several
+seconds more, for its shader compile. Show progress from `cs3d:progress`, and keep the screenshot until `cs3d:loaded`.
 
 ## Testing
 

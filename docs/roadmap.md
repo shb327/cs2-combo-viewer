@@ -7,8 +7,8 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 0. Research | How existing viewers work and where the data lives ([landscape](landscape.md), [how it works](how-it-works.md)) | Done |
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
 | 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | Done |
-| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | A done; B in review |
-| 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page | |
+| 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | Done |
+| 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | In review |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
 
@@ -28,7 +28,9 @@ Each phase ends with something that runs. Later phases are rough and will change
   `customplayer_ctm_st6_varianti`, model `agents/models/ctm_st6/ctm_st6_varianti.vmdl`). Only built agents can be shown.
 - Default: `DEFAULT_AGENT` in `viewer/src/lib/data/agents.ts` (`customplayer_ctm_st6_varianti`), the same in the app and
   the embed.
-- Per load: the embed's `loadout_agent=<id>` URL parameter, or `loadout_agent` in the options of `cs3d:load` /
+- The combo embed (phase 4): `agent=<item definition index>` in its URL or in `cs3d:load`'s combo; empty is the
+  default ([embed.md](embed.md)).
+- Per load (the older item embed): the embed's `loadout_agent=<id>` URL parameter, or `loadout_agent` in the options of `cs3d:load` /
   `cs3d:set`; in the app, `fpa=<id>` (else the visitor's last pick, else the default). A combo screenshot passes its
   own agent this way (for example to show custom sleeves).
 - First person draws the agent's `firstperson_sleeves` (Ricksaw has none) and, under skin gloves, the glove model's arm
@@ -440,7 +442,7 @@ Part A is complete (merged). Part B followed.
 
 ### B: hosting on Cloudflare R2 (branch `phase-3b-upload`)
 
-Status: **done, in review**. Measurements in `C:\cs2-data\reference\compare\p3b\`.
+Status: **done** (PR #8). Measurements in `C:\cs2-data\reference\compare\p3b\`.
 
 - [x] rclone v1.75.2 in `C:\dev\tools` (checked against rclone.org's `SHA256SUMS` and its signature); the R2 token
   (Object Read & Write on `combo-skin-assets` only) and the rclone remote `combo-r2` made by hand, the config
@@ -524,7 +526,175 @@ release", in 4 s. (Listing the bucket with dates took 3 minutes, a request per o
 
 #### Where it stopped
 
-Part B is complete. Next: phase 4, the embed on combo.skin (notes below).
+Part B is complete (merged). Phase 4 followed.
+
+## Phase 4: the embed (branch `phase-4-embed`)
+
+Status: **done, in review**. The contract is [embed.md](embed.md); checks and their data in
+`C:\cs2-data\reference\compare\p4\` (tools: `C:\cs2-data\tools\embed-check.mjs`, `ff-handshake.mjs`).
+
+- [x] Design agreed: `/combo` with items by index, the `cs3d:` protocol with ids, origins, headers, hosting on Pages.
+- [x] The embed (`viewer/src/pages/combo-page.tsx`, `viewer/src/lib/embed/combo*.ts`, `origins.ts`, `webgl.ts`,
+  `early-messages.ts`).
+- [x] No WebGL2, context loss, the first frame.
+- [x] `_headers` (CSP with frame-ancestors), sent by `vite preview` too.
+- [x] The test host (`viewer/test/host/`), on 5322 (allowed) and 5323 (not).
+- [x] Checks: message order, other origins, the handshake, context loss, memory over 20 switches, load times.
+- [x] Docs: embed.md, architecture, this page, the API page.
+
+#### What was built
+
+- **`/combo`**: knife and gloves by item definition and paint index, an exact float and seed for each, the agent by its
+  index (empty: Ricksaw), `view=fp|orbit`, `ui=0|1`. Checked against the catalog before anything loads: a missing or bad
+  field, an unknown item, a finish that isn't built, a float outside the finish's range (more than 0.0001 out) each give
+  `cs3d:error` with a code and a sentence, and no scene. The page is light (9 KB); three.js and the viewer are fetched
+  only after the WebGL2 check (`combo-runner.ts`).
+- **Messages**: `ready`, `progress`, `loaded`, `error`, `recovering`, `state`; commands `load`, `inspect`, `setView`,
+  `getState` (and `loseContext` with `debug=1`), each with an `id` echoed by its events. Commands sent before the page
+  has loaded are kept from the first module on (`early-messages.ts`): without that, the test host's command at the
+  iframe's `load` event was lost.
+- **Origins**: accepted from combo.skin, view.combo.skin, admin.combo.skin and local ports 5173, 4173, 5174, 5320,
+  5321, 5322, from the parent window only; posted only to the parent's origin (`ancestorOrigins`, else the referrer,
+  else the first allowed message). The older `/embed` (the pipeline's checks) now follows the same list; it used to
+  accept any origin and reply to `'*'`.
+- **Headers**: `frame-ancestors 'self' https://combo.skin https://admin.combo.skin http://localhost:* http://127.0.0.1:*`
+  and a CSP for the rest (`'wasm-unsafe-eval'` was needed: three.js' meshopt decoder is WebAssembly), `nosniff`,
+  referrer and permissions policies, immutable caching of `/assets/*`.
+- **Context loss**: the view is thrown away (its context released with `forceContextLoss`), rebuilt on a new canvas and
+  the combo loaded again; a second loss before it has loaded is reported (`context-lost`, retryable). `dispose()` now
+  releases the context in the app too, so rebuilds don't pile contexts up (Chrome keeps about 16).
+- **First frame**: `index.html` paints the page colour and an animated bar before any script; the map's background goes
+  up as soon as the 3D code has loaded, next to the catalog's load.
+- **A texture leak, fixed**: every switch of item left about 57 textures on the GPU (three.js' count grew from 72 to
+  1,207 over 20 switches): the cleared models' materials and textures weren't freed, nor the composites' inputs (the
+  weapon grunge and wear, paint textures) held in uniforms that three.js doesn't own, and the glove layers copied into
+  texture arrays stayed uploaded. `lib/viewer/dispose.ts` frees a material with its textures (properties, uniforms, and
+  uniforms added in `onBeforeCompile`, registered with `addedUniforms`); `packLayers` frees its layers. The app's
+  viewer pages had the same leak.
+
+#### Checks
+
+All with the production build (`VITE_ASSET_BASE=https://assets.combo.skin`) on `vite preview` and the test host on
+another origin; headless Chrome with a new profile.
+
+- **Message order, every test combo** (`embed-check.mjs order`): by URL `ready progress… loaded` (reference 3.2 s,
+  Big Swell 6.5 s, vanilla Butterfly 1.3 s, Darryl 1.3 s, warm cache), by message in the same iframe `progress…
+  loaded` for each (0.6–1.4 s), `setView` orbit and back, `inspect`, `getState`, then six bad requests, each with the
+  right code (`unknown-knife` for 9999, `bad-params` for a float of 0.5 on Ruby and for missing gloves,
+  `unknown-agent` for 1, `unknown-gloves-finish` for a knife's paint index on gloves, `unknown-knife` for the gloves'
+  index as the knife), and a good load after them. No CORS, CSP or console error and no failed request (the
+  background still loads as a plain image without CORS, as in 3B).
+- **Other origins** (`origin`): the host on 5323 frames the embed (allowed: local) and its URL combo draws, but its
+  `cs3d:load`, `cs3d:loseContext` and `cs3d:getState` are ignored: no message back, no request for Big Swell's files,
+  the context untouched.
+- **Handshake** (`handshake`, `ff-handshake.mjs`): with `Referrer-Policy: no-referrer` and the combo sent by message,
+  in Chrome and in Firefox 159 (headless, its own profile, over WebDriver BiDi): `→ load`, `← ready`, `progress`,
+  `loaded`, no errors. Both browsers have `ancestorOrigins` and neither lets a script hide it, so the last fallback
+  (the first message) was checked with a local build whose detection was turned off (not committed): `ready` came
+  only after the host's message, then the combo loaded.
+- **Context loss** (`lose`, with `WEBGL_lose_context`): lost while loading (after 15 files): `recovering`, then
+  `progress… loaded`; lost after loading: rebuilt and loaded; lost twice in a row: `cs3d:error` `context-lost`
+  (retryable), no live context left; the page's next `cs3d:load` loaded. One live context after each recovery.
+- **Memory over 20 switches** in one iframe (`memory 20 nolose`; the four test combos in turn; after each, a forced
+  garbage collection, then the JS heap, the GPU process's memory from Windows' `GPU Process Memory` counters, the live
+  WebGL contexts and three.js' counts):
+
+  | | Start (reference) | After 20 switches (reference) | Range over the 20 |
+  | --- | ---: | ---: | ---: |
+  | JS heap | 10.2 MB | 11.5 MB | 11.2–13.0 MB |
+  | GPU process memory (shared; this PC's GPU reports no dedicated memory) | 2,107 MB | 2,401 MB | 1,801–2,585 MB, by combo, not rising |
+  | Live WebGL contexts (made) | 1 (2, with the WebGL2 probe) | 1 (2) | 1 |
+  | three.js textures / geometries / programs | 56 / 22 / 13 | 56 / 22 / 13 | the same four values per combo, every cycle |
+
+  Before the leak fix the texture count went from 72 to 1,207. With a forced context loss every fourth switch
+  (`memory 20`): one live context throughout (8 made). The reference's render after the 20 switches matches the first
+  (`memory-start.png`, `memory-end.png`).
+- **The pipeline's check** after the disposal changes, from R2: all 20 knives in first person, 94 glove finishes and 63 agents pass (`C:\cs2-data\reference\compare\p4-check\`).
+
+#### Load times
+
+The reference combo by URL in the test host's iframe, cold (a new profile, cache disabled), assets from R2
+(`embed-check.mjs time`; "loaded" is `cs3d:loaded`'s `ms`, from the iframe's start; part C measured the same way,
+without the iframe):
+
+| Conditions | `cs3d:ready` (at the host) | First progress | Loaded | Downloaded |
+| --- | ---: | ---: | ---: | ---: |
+| This PC, no throttling (3 runs) | 0.18–0.26 s | 0.61–0.66 s | **2.9–3.0 s** | 33.8 MB, 63 requests |
+| CPU 4× slower, no network limit (1 run) | 0.39 s | 0.93 s | 3.7 s | the same |
+| **Weak device: CPU 4× slower and 10 Mbit/s** (2 runs) | 0.55–0.63 s | 1.4 s | **30.5 s** | the same |
+
+Part C measured 4.0 s locally and 33.5 s at 10 Mbit/s, and 3B 4.3–4.6 s from R2: the iframe adds nothing measurable.
+No errors in any run.
+
+**Weak devices.** The throttled run is the network's: 33.8 MB at 10 Mbit/s is 27 s for the bytes alone, and Chrome's
+CPU throttling doesn't slow the GPU, where the rest happens (shader compiles, the composites), so it says little about
+a phone's GPU. A lighter mode for phones (not built) would need:
+
+- Smaller textures: a second texture set at half size (1024; most are 2048 now), about a quarter of the bytes, chosen
+  by the viewer from the screen size. The biggest files are data textures (the weapon grunge 5.6 MB, the glove AO and
+  normal, the paint wear), so this is where most of the 33 MB is.
+- Less GPU memory: GPU-compressed textures (KTX2 / Basis, phase 2C's note), composites at 1024 instead of 2048.
+- Less to draw: pixel ratio 1, no antialiasing or bloom (the older embed's `quality=lite` does part of this), and the
+  environment's reflections from a smaller EXR.
+- The v2 gloves' compile (several seconds even here): specialise or precompute it (part A's options) before phones.
+- A real phone to measure on: CPU throttling in Chrome is not one.
+
+
+#### Hosting the viewer at view.combo.skin
+
+Recommended: a **Cloudflare Pages project built from this repository** on every push to `main` (only reviewed, merged
+code). The build needs nothing from the game: it never reads the asset folder (`public/assets` isn't copied), and the
+assets come from R2. Steps, in the Cloudflare dashboard, by hand:
+
+1. Workers & Pages → Create → Pages → Connect to Git. Install the Cloudflare GitHub app with access to **only this
+   repository** (`shb327/cs2-combo-viewer`), not all repositories.
+2. A project (for example `view-combo-skin`), production branch `main`, framework preset none, build command
+   `npm ci && npm run build`, build output directory `dist`, root directory `viewer`.
+3. Environment variables (production): `VITE_ASSET_BASE` = `https://assets.combo.skin`, `NODE_VERSION` = `24` (Vite 7
+   needs 20.19 or later; this PC builds with Node 26). Nothing secret: the build reads no key.
+4. Preview deployments off for other branches (Settings → Builds → branch control: production branch only); their
+   `*.pages.dev` addresses aren't in the bucket's CORS, so they couldn't load assets anyway.
+5. Custom domain `view.combo.skin` (Pages adds the DNS record in the combo.skin zone).
+6. **Web Analytics off** for this project: its beacon would be blocked by the CSP; combo.skin counts 3D opens from
+   `cs3d:loaded`.
+7. After the first deploy:
+   `https://view.combo.skin/combo?knife=507&knife_paint=415&knife_float=0.01&knife_seed=1&gloves=5034&gloves_paint=10033&gloves_float=0.15&gloves_seed=269`
+   shows the reference combo, and the response has the `Content-Security-Policy` from `_headers`.
+
+`_headers` is in the build's output (`dist/_headers`); Pages serves `index.html` for `/combo` (there's no `404.html`,
+so it runs as a single-page app). The alternative, uploading with wrangler from a Mac, works the same but needs wrangler
+installed and a deploy by hand after each merge.
+
+#### Left
+
+- A lighter mode for phones (see the estimate above): not built.
+- The fallback for browsers without `ancestorOrigins` is checked only with a patched build: every browser tested has it.
+- The Combo Skin side: the button, the iframe and the fallback to the screenshot (from [embed.md](embed.md)).
+
+#### Where it stopped
+
+Phase 4 is complete and in review. Next: phase 5, the screenshot worker (notes below).
+
+## Phase 5 notes (from phase 4)
+
+What the screenshot worker needs from the embed (not built yet):
+
+- **A fixed frame**: 1920×1080 with `ui=0`, pixel ratio 1 and no adaptive resolution, so every shot has the same size
+  and framing: a parameter (for example `frame=1920x1080`) that fixes the canvas instead of following the window.
+- **A "ready to capture" event**: `cs3d:loaded` comes when the combo is drawn, but a shot needs a frame known to be
+  final: every texture uploaded, the composites rendered, the background in, the idle animation at a fixed time (or
+  paused) and the hands' sway off (the older embed's `viewmodel_sway`; not in `/combo` yet). Proposal:
+  `cs3d:captureReady { id, release }` after two drawn frames with nothing loading, and a command
+  `cs3d:capture { id, width, height, format }` answered with the image (as `/embed`'s `cs3d:screenshot` does), so the
+  worker doesn't depend on the browser's own screenshot.
+- **A pinned release**: the worker's build with `VITE_ASSET_RELEASE`, so a shot names the data it was taken with
+  (`release` is in `ready` and `loaded` already).
+- **Context loss**: a lost context during a shot should end in a retry in a fresh page (the embed rebuilds once, then
+  reports `context-lost`).
+- **Its origin**: if the worker frames the embed from a page of its own, that origin goes on the list in `origins.ts`
+  and in `frame-ancestors`; a worker that opens `/combo` itself, not framed, needs neither.
+- The v2 gloves' first compile (several seconds, part A) dominates a cold shot: keep one browser and profile warm
+  between shots (Chrome's shader cache on disk).
 
 ## Phase 4 notes (from phase 3)
 
