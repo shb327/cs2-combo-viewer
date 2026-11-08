@@ -24,7 +24,7 @@ export type ComboEvent =
   /** With `capture=1`: the loaded combo's frame is final (everything loaded and drawn, the pose held). */
   | { type: 'cs3d:captureReady'; id: string | null; combo: NormalizedCombo; release: string | null }
   /** Reply to `cs3d:capture` (another name than the command's: a page that isn't framed gets its own events). */
-  | { type: 'cs3d:captured'; id: string | null; png: Blob; width: number; height: number; combo: NormalizedCombo; release: string | null }
+  | { type: 'cs3d:captured'; id: string | null; png: Blob; width: number; height: number; coverage: number; combo: NormalizedCombo; release: string | null }
 
 const COMMANDS = new Set(['cs3d:load', 'cs3d:inspect', 'cs3d:setView', 'cs3d:getState', 'cs3d:capture', 'cs3d:loseContext'])
 

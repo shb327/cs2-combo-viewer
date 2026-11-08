@@ -876,7 +876,7 @@ export class SkinViewer {
    * it, at the canvas' pixel size. The frame is drawn and read in the same task, so the drawing buffer can't have been
    * cleared yet. Needs a background fetched with CORS (`readableBackground`), else the result can't be read back.
    */
-  captureCanvas(): HTMLCanvasElement {
+  captureCanvas(): { canvas: HTMLCanvasElement; coverage: number } {
     const source = this.renderer.domElement
     const out = document.createElement('canvas')
     out.width = source.width
@@ -893,7 +893,7 @@ export class SkinViewer {
     }
     this.map.render()
     ctx.drawImage(source, 0, 0)
-    return out
+    return { canvas: out, coverage: coverage(source) }
   }
 
   screenshot(): string {
@@ -1251,3 +1251,19 @@ export class SkinViewer {
   }
 }
 
+/**
+ * The share of a canvas' pixels that aren't transparent (0 to 1), from a small copy: read in the same task as the
+ * canvas was drawn. A cleared WebGL frame over the page's background reads 0.
+ */
+function coverage(source: HTMLCanvasElement): number {
+  const small = document.createElement('canvas')
+  small.width = 192
+  small.height = Math.max(1, Math.round((192 * source.height) / Math.max(1, source.width)))
+  const ctx = small.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return 0
+  ctx.drawImage(source, 0, 0, small.width, small.height)
+  const { data } = ctx.getImageData(0, 0, small.width, small.height)
+  let drawn = 0
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 0) drawn++
+  return drawn / (small.width * small.height)
+}

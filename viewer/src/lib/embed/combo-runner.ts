@@ -111,12 +111,12 @@ export class ComboRunner {
    * With `capture`: the frame shown, background included, as a PNG at the canvas' size.
    * @returns null when nothing is loaded (or the view is gone)
    */
-  async capture(): Promise<{ png: Blob; width: number; height: number } | null> {
+  async capture(): Promise<{ png: Blob; width: number; height: number; coverage: number } | null> {
     const viewer = this.viewer
     if (!this.options.capture || !viewer || this.isLost(viewer)) return null
-    const canvas = viewer.captureCanvas()
+    const { canvas, coverage } = viewer.captureCanvas()
     const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    return png ? { png, width: canvas.width, height: canvas.height } : null
+    return png ? { png, width: canvas.width, height: canvas.height, coverage: Math.round(coverage * 1000) / 1000 } : null
   }
 
   /** Testing aid: loses the context the way a GPU reset does. */
