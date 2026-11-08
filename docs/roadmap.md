@@ -815,7 +815,7 @@ Also in this branch: `X-Robots-Tag: noindex` for the `*.pages.dev` address (a ho
 Done, in review. The full check after the change (`node pipeline\check.mjs --out look-check`, local assets, then
 `--shaders`): **all 753 pass** (576 knife finishes, 94 glove finishes, 20 knives in first person, 63 agents; average
 warm loads 0.9, 0.9, 1.6 and 1.1 s) and all 1,158 compositing shaders compile and link; sheets in
-`C:\cs2-dataeference\compare\look-check\`, now in the brighter studio. Looked through: the 28 spot items side by side
+`C:\cs2-data\reference\compare\look-check\`, now in the brighter studio. Looked through: the 28 spot items side by side
 with the game, and the Karambit, Specialist, Sport and Hydra sheets; no other finish looked clearly wrong. No asset
 changed (viewer code only), so nothing to upload.
 
