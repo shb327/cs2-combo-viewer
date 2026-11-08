@@ -1,3 +1,5 @@
+// First: the embed's listener, so no early message from the parent page is lost.
+import '@/lib/embed/early-messages'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

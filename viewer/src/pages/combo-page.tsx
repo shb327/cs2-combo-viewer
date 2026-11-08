@@ -12,6 +12,7 @@ import {
 } from '@/lib/embed/combo'
 import { asComboCommand, ComboChannel, type ComboEvent, type ComboStatus } from '@/lib/embed/combo-protocol'
 import type { ComboRunner } from '@/lib/embed/combo-runner'
+import { takeMessages } from '@/lib/embed/early-messages'
 import { hasWebGL2 } from '@/lib/embed/webgl'
 
 /** What the page asked for last: the combo, the view, the command's id and when it came. */
@@ -168,8 +169,7 @@ export function ComboPage() {
           break
       }
     }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
+    return takeMessages(onMessage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
