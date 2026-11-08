@@ -174,8 +174,10 @@ export function createWorker({ api, renderer, log, config, now = Date.now }) {
      */
     async run({ once = false } = {}) {
       let me
+      // Polling, the worker waits for an API that is down (it may be starting); once, it gives up after a few tries.
+      let tries = 0
       try {
-        me = await retrying('GET /worker/me', () => api.me())
+        me = await retrying('GET /worker/me', () => { tries++; return api.me() }, () => !once || tries < 3)
       } catch (e) {
         fatalIfAuth(e)
         throw new FatalError(`The API at its address doesn't answer: ${e.message}`, 2)

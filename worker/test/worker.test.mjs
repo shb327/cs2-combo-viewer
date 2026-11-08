@@ -155,3 +155,12 @@ test('poll: waits after a 204 and takes a combo that becomes due', async () => {
   const stats = await running
   assert.equal(stats.stored, 1)
 })
+
+test('once, with the API down: gives up after a few tries (exit 2)', async () => {
+  const { log } = memoryLog()
+  const api = createApi({ apiUrl: 'http://127.0.0.1:9', token: () => token })
+  const worker = createWorker({ api, renderer: fakeRenderer(), log, config })
+  const started = Date.now()
+  await assert.rejects(worker.run({ once: true }), (e) => e instanceof FatalError && e.exitCode === 2 && /doesn't answer/.test(e.message))
+  assert.ok(Date.now() - started < 15_000)
+})
