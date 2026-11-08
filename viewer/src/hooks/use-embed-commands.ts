@@ -1,7 +1,7 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { ViewerStateApi } from '@/hooks/use-viewer-state'
 import type { ViewOptions } from '@/hooks/use-viewer-sync'
-import { asCommand, buildEmbedState, emit, EMBED_VERSION, replier, type EmbedItemInfo, type EmbedOptions, type EmbedTarget } from '@/lib/embed'
+import { asCommand, buildEmbedState, emit, EMBED_VERSION, replier, whenParentOrigin, type EmbedItemInfo, type EmbedOptions, type EmbedTarget } from '@/lib/embed'
 import type { SkinViewer } from '@/lib/viewer/skin-viewer'
 import type { Lighting, Viewmodel } from '@/lib/viewer/viewer-options'
 
@@ -28,7 +28,7 @@ export function useEmbedCommands(context: Context): void {
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      const command = asCommand(e.data)
+      const command = asCommand(e)
       if (!command) return
       const { viewer, state, lighting, viewmodel, view, applyOptions, info, shareUrl, openShare, pendingOptions, setTarget, setView } = latest.current
       const reply = replier(e)
@@ -81,7 +81,8 @@ export function useEmbedCommands(context: Context): void {
       }
     }
     window.addEventListener('message', onMessage)
-    emit({ type: 'cs3d:ready', version: EMBED_VERSION })
+    // Posted once the parent's origin is known (at once, or with its first message).
+    void whenParentOrigin().then(() => emit({ type: 'cs3d:ready', version: EMBED_VERSION }))
     return () => window.removeEventListener('message', onMessage)
   }, [])
 }
