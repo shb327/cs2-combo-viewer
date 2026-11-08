@@ -11,7 +11,20 @@ export interface RunnerEvents {
   loaded(): void
   error(code: ComboErrorCode, message: string, retryable: boolean): void
   recovering(attempt: number): void
+  /** With `capture`: the loaded combo's frame is final. */
+  captureReady?(): void
 }
+
+export interface RunnerOptions {
+  /**
+   * For screenshots: pixel ratio 1 with no adaptive resolution, the sway off and the pose held at the idle's start, the
+   * background fetched so the frame can be read back (`capture()`), and `captureReady` once the frame is final.
+   */
+  capture?: boolean
+}
+
+/** Drawn frames in a row with nothing loading before a capture's frame counts as final. */
+const STILL_FRAMES = 2
 
 /**
  * Rebuilds after a lost WebGL context; a second loss before the combo has loaded again and the page is told instead
@@ -34,9 +47,10 @@ export class ComboRunner {
   private losses = 0
   private stopProgress: (() => void) | null = null
   private recoverTimer = 0
+  private stillFrame = 0
   private readonly observer: IntersectionObserver | null
 
-  constructor(private readonly container: HTMLElement, private readonly events: RunnerEvents) {
+  constructor(private readonly container: HTMLElement, private readonly events: RunnerEvents, private readonly options: RunnerOptions = {}) {
     this.observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(([entry]) => this.viewer?.setPaused(!entry.isIntersecting))
     this.observer?.observe(container)
     // At once, before any combo: the map's background goes up while the catalog and the combo's files load.
@@ -68,6 +82,7 @@ export class ComboRunner {
         // Only losses in a row count: a GPU reset long after the combo loaded is rebuilt again.
         this.losses = 0
         this.events.loaded()
+        if (this.options.capture) this.watchStill(token, viewer)
       })
       .catch((e: Error) => {
         // A load that failed because the context went is the loss handler's to deal with.
@@ -92,6 +107,18 @@ export class ComboRunner {
     return this.viewer && !this.isLost(this.viewer) ? this.viewer.snapshotCanvas() : null
   }
 
+  /**
+   * With `capture`: the frame shown, background included, as a PNG at the canvas' size.
+   * @returns null when nothing is loaded (or the view is gone)
+   */
+  async capture(): Promise<{ png: Blob; width: number; height: number } | null> {
+    const viewer = this.viewer
+    if (!this.options.capture || !viewer || this.isLost(viewer)) return null
+    const canvas = viewer.captureCanvas()
+    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    return png ? { png, width: canvas.width, height: canvas.height } : null
+  }
+
   /** Testing aid: loses the context the way a GPU reset does. */
   loseContext(): void {
     this.viewer?.renderer.getContext().getExtension('WEBGL_lose_context')?.loseContext()
@@ -100,6 +127,7 @@ export class ComboRunner {
   dispose(): void {
     this.token++
     clearTimeout(this.recoverTimer)
+    cancelAnimationFrame(this.stillFrame)
     this.endProgress()
     this.observer?.disconnect()
     this.dropViewer()
@@ -114,16 +142,38 @@ export class ComboRunner {
     viewer.setSeed(combo.knife.seed)
   }
 
+  /**
+   * Waits for the loaded combo's frame to be final: every file loaded, the background in, then `STILL_FRAMES` frames
+   * drawn in a row with that still true (the composites and the texture uploads happen in the first).
+   */
+  private watchStill(token: number, viewer: SkinViewer): void {
+    cancelAnimationFrame(this.stillFrame)
+    let still = 0
+    const step = () => {
+      if (token !== this.token || viewer !== this.viewer) return
+      const { loaded, total } = loadCounts()
+      still = loaded >= total && viewer.backgroundReady ? still + 1 : 0
+      if (still > STILL_FRAMES) this.events.captureReady?.()
+      else this.stillFrame = requestAnimationFrame(step)
+    }
+    this.stillFrame = requestAnimationFrame(step)
+  }
+
   private createViewer(): SkinViewer | null {
     let viewer: SkinViewer
+    const capture = !!this.options.capture
     try {
-      viewer = new SkinViewer(this.container, { assetBase: ASSET_BASE, background: null, antialias: true })
+      viewer = new SkinViewer(this.container, { assetBase: ASSET_BASE, background: null, antialias: true, readableBackground: capture })
     } catch (e) {
       this.events.error('context-lost', `The browser couldn't start 3D (${(e as Error).message}).`, true)
       return null
     }
     viewer.setLighting({ ...DEFAULT_LIGHTING })
-    viewer.setViewmodel({ ...DEFAULT_VIEWMODEL, leftHanded: false })
+    viewer.setViewmodel({ ...DEFAULT_VIEWMODEL, leftHanded: false, sway: !capture })
+    if (capture) {
+      viewer.setQuality({ resolution: 1, antialias: true, post: true, adaptive: false })
+      viewer.setStillTime(0)
+    }
     viewer.renderer.domElement.addEventListener('webglcontextlost', (e) => this.onContextLost(viewer, e))
     if (import.meta.env.DEV) Object.assign(window, { __viewer: viewer })
     this.viewer = viewer

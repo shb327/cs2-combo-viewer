@@ -20,6 +20,9 @@ interface Request { id: string | null; input: ComboInput; view: ComboView; start
 
 interface Shown { status: ComboStatus | 'idle'; error: string; combo: NormalizedCombo | null }
 
+/** The fixed frame of `capture=1` (CSS pixels, drawn at pixel ratio 1): the size of Combo Skin's screenshots. */
+export const CAPTURE_SIZE = { width: 1920, height: 1080 } as const
+
 /** One channel per page (React may mount the page twice in development). */
 let channel: ComboChannel | null = null
 const WEBGL2 = typeof document !== 'undefined' && hasWebGL2()
@@ -35,8 +38,9 @@ export function ComboPage() {
     input: comboFromParams(search),
     view: parseView(search.get('view')),
     hasCombo: COMBO_KEYS.some((k) => search.has(k)),
-    ui: search.get('ui') !== '0',
+    ui: search.get('ui') !== '0' && search.get('capture') !== '1',
     debug: search.get('debug') === '1',
+    capture: search.get('capture') === '1',
   }))
   channel ??= new ComboChannel(() => ({ type: 'cs3d:ready', version: COMBO_VERSION, release: ASSET_LAYOUT.release, webgl2: WEBGL2 }))
 
@@ -101,7 +105,12 @@ export function ComboPage() {
           setShare(0)
           post({ type: 'cs3d:recovering', id: id(), reason: 'context-lost', attempt })
         },
-      })
+        captureReady: () => {
+          const req = latest.current.request
+          const combo = latest.current.shown.combo
+          if (req && combo) post({ type: 'cs3d:captureReady', id: req.id, combo, release: ASSET_LAYOUT.release })
+        },
+      }, { capture: initial.capture })
       runner.current = created
       if (initial.debug) Object.assign(window, { __comboRunner: created })
       setRunnerReady(true)
@@ -164,6 +173,18 @@ export function ComboPage() {
         case 'cs3d:getState':
           post({ type: 'cs3d:state', id, status: now.status === 'idle' ? 'loading' : now.status, combo: now.combo, view: current?.view ?? 'fp', release: ASSET_LAYOUT.release, loadId: current?.id ?? null })
           break
+        case 'cs3d:capture': {
+          /** A refused capture leaves the combo shown as it is: only the command's error. */
+          const refuse = (code: ComboErrorCode, message: string, retryable: boolean) => post({ type: 'cs3d:error', id, code, message, retryable })
+          if (!initial.capture) { refuse('bad-params', "cs3d:capture needs the page's capture=1.", false); break }
+          const combo = now.combo
+          if (now.status !== 'loaded' || !combo) { refuse('bad-params', 'Nothing to capture: no combo is loaded.', false); break }
+          void runner.current?.capture().then((shot) => {
+            if (shot) post({ type: 'cs3d:captured', id, ...shot, combo, release: ASSET_LAYOUT.release })
+            else refuse('context-lost', "The frame couldn't be read (the view is gone).", true)
+          })
+          break
+        }
         case 'cs3d:loseContext':
           if (initial.debug) runner.current?.loseContext()
           break
@@ -176,7 +197,7 @@ export function ComboPage() {
   const loading = shown.status === 'loading'
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-background">
-      <div ref={container} className="absolute inset-0" />
+      <div ref={container} className="absolute inset-0" style={initial.capture ? { right: 'auto', bottom: 'auto', ...CAPTURE_SIZE } : undefined} />
       {frozen && <FrozenFrame canvas={frozen.canvas} thawing={frozen.thawing} />}
       {initial.ui && <EmbedStatus loading={loading && !frozen} error={shown.error} />}
       {loading && (

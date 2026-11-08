@@ -36,6 +36,8 @@ export interface MapStageHost {
   exposure: () => number
   /** The lights' turn (degrees), which turns the panorama too. */
   lightYaw: () => number
+  /** Fetch the background with CORS, so it can be drawn into a readable canvas. */
+  readableBackground?: boolean
   /** Called once a map (or the studio) is in place. */
   onChange: () => void
 }
@@ -95,7 +97,7 @@ export class MapStage {
       return
     }
     const dataBase = this.host.dataBase
-    const backgroundLoad = loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size))
+    const backgroundLoad = loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size, this.host.readableBackground))
     /**
      * The first map of the page: its background (a small image) goes up as soon as it has loaded, without the veil, so
      * the visitor sees the map while the environment (a larger file), the lights and the model still load.

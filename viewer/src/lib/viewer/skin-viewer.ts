@@ -98,6 +98,8 @@ export class SkinViewer {
   private mapLighting: MapLighting = { ...DEFAULT_MAP_LIGHTING }
   /** The adaptive resolution's share of the 'auto' resolution (1 = full). */
   private adaptiveScale = 1
+  /** A fixed time (ms) for the viewmodel and the idle: every frame the same pose (screenshots). Null: live. */
+  private stillTime: number | null = null
   /** Frame timing for the adaptive resolution: a smoothed frame time (ms), the last frame, and when it last changed. */
   private frameMs = 16
   private lastTick = 0
@@ -187,6 +189,7 @@ export class SkinViewer {
       exposure: () => this.lighting.exposure,
       lightYaw: () => this.lighting.angle + this.lightSpin,
       onChange: () => this.updateFixedInspect(),
+      readableBackground: opts.readableBackground,
     }, opts.background === undefined ? 0x0b0b12 : opts.background)
     this.fixed = new FixedInspect(this.camera, this.holder, this.renderer.domElement)
     this.scene.environmentIntensity = DEFAULT_LIGHTING.ambient
@@ -227,9 +230,10 @@ export class SkinViewer {
   /** One frame: the viewmodel, the playing animations, the lights, then the draw. */
   private tick(time: number): void {
     this.adapt(time)
-    if (this.firstPerson) this.updateViewmodel(time / 1000)
+    const pose = this.stillTime ?? time
+    if (this.firstPerson) this.updateViewmodel(pose / 1000)
     if (this.inspectStart !== null) this.stepInspect(time)
-    else if (this.fpRig?.idleLoop) this.stepIdle(time)
+    else if (this.fpRig?.idleLoop) this.stepIdle(pose)
     else if (!this.firstPerson) this.fixed.step(this.autoRotate)
     if (this.agentRig) poseAgent(this.agentRig, (time - this.agentRig.start) / 1000)
     if (this.petRig) this.stepPet(time)
@@ -239,6 +243,22 @@ export class SkinViewer {
     for (const finish of this.loaded.finishes) if (isGlove(finish)) finish.update(this.renderer)
     if (!this.firstPerson && !this.fixed.active) this.controls.update()
     this.map.render()
+  }
+
+  /**
+   * Holds the first-person pose at one moment: the viewmodel and the idle are drawn at `ms` on every frame (null: live
+   * again). With the sway off, every frame of a loaded combo is then the same.
+   */
+  setStillTime(ms: number | null): void {
+    this.stillTime = ms
+  }
+
+  /** Whether the map's background behind the canvas has been decoded and is in the page (or there is none). */
+  get backgroundReady(): boolean {
+    const bg = this.map.video
+    if (!bg) return this.map.id === null
+    if (!bg.isConnected) return false
+    return bg instanceof HTMLImageElement ? bg.complete && bg.naturalWidth > 0 : bg.readyState >= 2
   }
 
   /** Stops drawing frames (offscreen) or starts again. */
@@ -849,6 +869,31 @@ export class SkinViewer {
     copy.height = source.height
     copy.getContext('2d')?.drawImage(source, 0, 0)
     return copy
+  }
+
+  /**
+   * The frame as the page shows it: the map's background (as CSS draws it, `object-fit: cover`) with the canvas over
+   * it, at the canvas' pixel size. The frame is drawn and read in the same task, so the drawing buffer can't have been
+   * cleared yet. Needs a background fetched with CORS (`readableBackground`), else the result can't be read back.
+   */
+  captureCanvas(): HTMLCanvasElement {
+    const source = this.renderer.domElement
+    const out = document.createElement('canvas')
+    out.width = source.width
+    out.height = source.height
+    const ctx = out.getContext('2d')
+    if (!ctx) throw new Error('No 2D canvas for the capture.')
+    const bg = this.map.video
+    const bw = bg instanceof HTMLImageElement ? bg.naturalWidth : bg?.videoWidth ?? 0
+    const bh = bg instanceof HTMLImageElement ? bg.naturalHeight : bg?.videoHeight ?? 0
+    if (bg && bw && bh) {
+      const scale = Math.max(out.width / bw, out.height / bh)
+      const w = bw * scale, h = bh * scale
+      ctx.drawImage(bg, (out.width - w) / 2, (out.height - h) / 2, w, h)
+    }
+    this.map.render()
+    ctx.drawImage(source, 0, 0)
+    return out
   }
 
   screenshot(): string {

@@ -10,6 +10,11 @@ export interface SkinViewerOptions extends WeaponFinishOptions {
   background?: THREE.ColorRepresentation | null
   /** Multisampled edges (fixed for the canvas' lifetime: a change needs a new viewer). Default true. */
   antialias?: boolean
+  /**
+   * Fetch the map's background with CORS, so a frame composed with it can be read back (the combo embed's capture).
+   * Only where the asset host allows the page's origin. Default false.
+   */
+  readableBackground?: boolean
 }
 
 /** How finely the viewer draws: for slower devices. */
