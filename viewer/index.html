@@ -7,9 +7,17 @@
   <link rel="icon" href="data:,">
   <title>Combo Skin 3D</title>
   <meta name="description" content="CS2 knife and glove combinations in 3D, in first person.">
+  <meta name="color-scheme" content="dark">
+  <!-- The first frame, before any script: the page's colour and a loading bar (the app replaces #boot). -->
+  <style>
+    html, body { margin: 0; background: #0a0c0a; }
+    #boot { position: fixed; inset: auto 0 0 0; height: 3px; overflow: hidden; background: rgb(0 0 0 / 0.3); }
+    #boot::after { content: ""; position: absolute; inset: 0; width: 30%; background: #00de12; animation: boot 1.2s ease-in-out infinite; }
+    @keyframes boot { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div id="boot"></div></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
