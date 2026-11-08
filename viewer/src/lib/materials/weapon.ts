@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { addedUniforms, disposeMaterial } from '@/lib/viewer/dispose'
 import type { AirbrushItem, BareItem, CompositeItem, CustomPaintItem, MulticolorItem, PaintStyleItem, Rgb } from '@/lib/data/items'
 import { COMPOSITE_ROUGH_GLSL, type WeaponComposite } from '@/lib/materials/composite'
 import { kitRollValues, type SeedRolls, type Placement } from '@/lib/data/rng'
@@ -140,6 +141,7 @@ export class WeaponFinish {
     const finish = STYLE_GLSL[style]
     const debugExpr = DEBUG_EXPR[debug] ?? (style === 'airbrush' ? AIRBRUSH_DEBUG_EXPR[debug] : undefined) ?? '0.0'
 
+    addedUniforms(this.material, this.u)
     this.material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.u)
       shader.vertexShader = shader.vertexShader
@@ -367,7 +369,7 @@ export class WeaponFinish {
   }
 
   dispose(): void {
-    this.material.dispose()
+    disposeMaterial(this.material)
     this.composite?.dispose()
   }
 }

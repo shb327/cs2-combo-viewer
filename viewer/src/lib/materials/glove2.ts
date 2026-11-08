@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { disposeMaterial } from '@/lib/viewer/dispose'
 import { dataPath, VIEWER_DATA } from '@/lib/asset-layout'
 import { valveRandom, type RandomFloat } from '@/lib/data/rng'
 import type { KitRollPlan } from '@/lib/data/catalog'
@@ -151,7 +152,7 @@ export class GloveV2Finish {
 
   dispose(): void {
     this.targets.dispose()
-    this.program.dispose()
+    disposeMaterial(this.program)
     this.quad.geometry.dispose()
     for (const d of this.disposers) d()
   }
