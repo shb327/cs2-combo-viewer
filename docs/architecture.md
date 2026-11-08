@@ -12,7 +12,7 @@ asset pipeline ──► asset bucket (models, textures, item data)
                    viewer (browser) ◄── embed API ◄── Combo Skin pages
                          │
                          ▼
-                 render service ──► combo screenshots
+      screenshot worker ◄──► Combo Skin API (claims a combo, sends its PNG)
 ```
 
 ## Asset pipeline
@@ -51,9 +51,13 @@ The viewer runs inside an iframe on another page (`https://view.combo.skin/combo
 The viewer accepts messages only from an allowlist of origins and posts only to its parent's, and only Combo Skin's
 pages (and local development pages) may frame it.
 
-## Render service
+## Screenshot worker
 
-The viewer in a headless browser with GPU access. Given a combo, it returns screenshots (and possibly a short turntable clip) for the combo's page. Combo Skin calls it when a combo is added.
+The viewer in a headless Chrome on a machine with a GPU ([`worker/`](../worker/README.md), phase 5). It pulls work
+rather than being called: it claims one combo at a time from Combo Skin's API (a 5-minute lease), draws it with its own
+build of the viewer pinned to one asset release (`/combo?capture=1`, [embed.md](embed.md#capturing)), and sends a
+1920×1080 PNG back; the API stores the original and makes the watermarked WebPs. It runs on the machine that runs the
+API, so nothing listens on the network for it.
 
 ## Hosting
 

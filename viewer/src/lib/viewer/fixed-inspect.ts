@@ -95,28 +95,30 @@ export interface StillBackground { widths: number[]; aspect: number }
  * its widths that covers a canvas of `size` CSS pixels on this screen (object-fit: cover); else its pre-rendered video
  * (backgrounds/<id>.mp4), else backgrounds/<id>.jpg. Null when it has none.
  */
-export async function loadBackground(base: string, still?: StillBackground, size?: { w: number; h: number }): Promise<HTMLVideoElement | HTMLImageElement | null> {
+export async function loadBackground(base: string, still?: StillBackground, size?: { w: number; h: number }, cors = false): Promise<HTMLVideoElement | HTMLImageElement | null> {
   if (still?.widths.length) {
     const { w, h } = size ?? { w: 1280, h: 720 }
     const need = Math.max(w, h * still.aspect) * Math.min(2, window.devicePixelRatio || 1)
     const widths = [...still.widths].sort((a, b) => a - b)
     const width = widths.find((x) => x >= need) ?? widths[widths.length - 1]
-    return (await loadBackgroundImage(`${base}-${width}.webp`)) ?? loadBackgroundImage(base + '.jpg')
+    return (await loadBackgroundImage(`${base}-${width}.webp`, cors)) ?? loadBackgroundImage(base + '.jpg', cors)
   }
-  return (await loadBackgroundVideo(base + '.mp4')) ?? loadBackgroundImage(base + '.jpg')
+  return (await loadBackgroundVideo(base + '.mp4', cors)) ?? loadBackgroundImage(base + '.jpg', cors)
 }
 
-function loadBackgroundImage(url: string): Promise<HTMLImageElement | null> {
+function loadBackgroundImage(url: string, cors = false): Promise<HTMLImageElement | null> {
   const image = new Image()
+  if (cors) image.crossOrigin = 'anonymous'
   Object.assign(image.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: '0' })
   image.decoding = 'async'
   image.src = url
   return image.decode().then(() => image, () => null)
 }
 
-export function loadBackgroundVideo(url: string): Promise<HTMLVideoElement | null> {
+export function loadBackgroundVideo(url: string, cors = false): Promise<HTMLVideoElement | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video')
+    if (cors) video.crossOrigin = 'anonymous'
     Object.assign(video, { muted: true, loop: true, playsInline: true, autoplay: true, preload: 'auto' })
     Object.assign(video.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', zIndex: '0' })
     const done = (v: HTMLVideoElement | null) => { clearTimeout(timer); resolve(v) }

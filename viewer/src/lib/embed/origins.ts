@@ -58,9 +58,19 @@ export function whenParentOrigin(): Promise<string> {
   return parentOrigin ? Promise.resolve(parentOrigin) : new Promise((resolve) => waiting.push(resolve))
 }
 
-/** Posts to the parent page, only to its own (allowed) origin; nothing when that isn't known. */
+/** The DOM event an embed that isn't framed dispatches on its own window for each of its messages (`detail`). */
+export const SELF_EVENT = 'cs3d'
+
+/**
+ * Posts to the parent page, only to its own (allowed) origin; nothing when that isn't known. Not framed (the
+ * screenshot worker drives the page itself): dispatched on the page's own window as a `cs3d` event instead, never posted.
+ */
 export function postToParent(data: unknown): boolean {
-  if (window.parent === window || !parentOrigin) return false
+  if (window.parent === window) {
+    window.dispatchEvent(new CustomEvent(SELF_EVENT, { detail: data }))
+    return true
+  }
+  if (!parentOrigin) return false
   window.parent.postMessage(data, parentOrigin)
   return true
 }

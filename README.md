@@ -4,12 +4,13 @@ A browser 3D viewer for Counter-Strike 2 knife and glove combinations: a skinned
 
 It is being built for [Combo Skin](https://github.com/shb327/combo-skin), a site for finding good-looking glove and knife combos, where every combo page will offer a 3D view next to its screenshot.
 
-**Status:** phases 1 to 3 done: every knife, glove and agent in Combo Skin's catalog (576 knife finishes, 94 glove finishes, 63 agents) built from the game files by our own pipeline, checked, and hosted on Cloudflare R2 at `assets.combo.skin`. Phase 4, the embed Combo Skin's "View in 3D" button opens (`/combo`, driven by `postMessage`), is in review. See the [roadmap](docs/roadmap.md).
+**Status:** phases 1 to 3 done: every knife, glove and agent in Combo Skin's catalog (576 knife finishes, 94 glove finishes, 63 agents) built from the game files by our own pipeline, checked, and hosted on Cloudflare R2 at `assets.combo.skin`. Phase 4, the embed Combo Skin's "View in 3D" button opens (`/combo`, driven by `postMessage`), is done. Phase 5, the screenshot worker, is in review. See the [roadmap](docs/roadmap.md).
 
 ## Layout
 
 - [`viewer/`](viewer/): the browser viewer (React, TypeScript, Vite, three.js). `cd viewer; npm.cmd ci; npm.cmd run dev`.
 - [`pipeline/`](pipeline/README.md): builds the viewer's assets from copies of the game files.
+- [`worker/`](worker/README.md): the screenshot worker: draws Combo Skin's combo screenshots with the viewer and sends them to its API.
 
 ## Goals
 

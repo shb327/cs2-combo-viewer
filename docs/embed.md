@@ -1,7 +1,7 @@
 # The combo embed
 
-The contract between the viewer and the pages that show it: Combo Skin's "View in 3D" button, the admin dashboard and,
-later, the screenshot worker. The viewer draws one combo (a knife in gloves, on an agent's arms) in first person, in an
+The contract between the viewer and the pages that show it: Combo Skin's "View in 3D" button, the admin dashboard and
+the screenshot worker. The viewer draws one combo (a knife in gloves, on an agent's arms) in first person, in an
 iframe, and is driven by its URL and by `postMessage`.
 
 - Address: **`https://view.combo.skin/combo?…`** (locally `http://127.0.0.1:5321/combo?…`, the production build on
@@ -16,15 +16,20 @@ iframe, and is driven by its URL and by `postMessage`.
 | `knife` | The knife's item definition index (Karambit `507`, Butterfly Knife `515`) | yes |
 | `knife_paint` | The finish's paint index (Doppler (Ruby) `415`); `0` or left out: vanilla | no |
 | `knife_float` | The exact float, 0 to 1, inside the finish's range | yes, except vanilla |
-| `knife_seed` | The pattern seed, a whole number from 0 to 1000 | yes, except vanilla |
+| `knife_seed` | The pattern seed, a whole number from 0 to 1000; left out: the default seed, `0` | no |
 | `gloves` | The gloves' item definition index (Specialist Gloves `5034`) | yes |
 | `gloves_paint` | The finish's paint index (Crimson Kimono `10033`, Big Swell `1437`) | yes |
 | `gloves_float` | The exact float, inside the finish's range | yes |
-| `gloves_seed` | The pattern seed, 0 to 1000 | yes |
+| `gloves_seed` | The pattern seed, 0 to 1000; left out: the default seed, `0` | no |
 | `agent` | The agent's item definition index (Bloody Darryl The Strapped `4613`); empty or left out: Lt. Commander Ricksaw \| NSWC SEAL (`5404`) | no |
 | `view` | `fp` (first person, the default) or `orbit` (the knife alone, turned with the mouse) | no |
 | `ui` | `1` (default): a loading pill and error messages over the view; `0`: only the view and the thin progress bar | no |
+| `capture` | `1`: the screenshot mode (below, "Capturing"): a fixed 1920×1080 frame, `ui=0`, the pose held still, `cs3d:captureReady` and `cs3d:capture` | no |
 | `debug` | `1`: accepts `cs3d:loseContext` (testing) | no |
+
+**Seeds left out.** A combo without seeds (Combo Skin sends none when a combo has no seed conditions) is drawn with
+seed `0` for each item left out, by the embed itself; `cs3d:loaded` echoes the seed drawn. Combo Skin's screenshot and
+its "View in 3D" send the same combo, so both draw the same pattern.
 
 A float a hair outside the finish's range (up to 0.0001, from rounding) is drawn at the range's end; further out is an
 error. Doppler and Gamma Doppler phases have their own paint indexes, as in the catalog. Every built item can be shown
@@ -54,6 +59,8 @@ by the URL have `id: null`.
 | `cs3d:error` | `id`, `code`, `message` (a sentence to show), `retryable` | The combo can't be drawn (codes below) |
 | `cs3d:recovering` | `id`, `reason` (`context-lost`), `attempt` (1) | The GPU dropped the view; the embed rebuilds it and loads the combo again (`progress`, then `loaded` follow) |
 | `cs3d:state` | `id`, `status` (`loading`, `loaded`, `error`), `combo`, `view`, `release`, `loadId` (the `id` of the request shown) | Reply to `cs3d:getState` |
+| `cs3d:captureReady` | `id`, `combo`, `release` | With `capture=1`: after `cs3d:loaded`, once the frame is final (see "Capturing") |
+| `cs3d:captured` | `id`, `png` (a `Blob`, `image/png`), `width`, `height` (1920, 1080), `coverage` (0 to 1: the share of the frame the 3D view drew), `combo`, `release` | Reply to `cs3d:capture` |
 
 The order for one request is always `progress`… then `loaded` or `error`, with `recovering` and more `progress` in
 between after a lost GPU context. A newer request supersedes an older one: the older one gets no further events.
@@ -66,6 +73,7 @@ between after a lost GPU context. A newer request supersedes an older one: the o
 | `cs3d:inspect` | `id` | Plays the knife's inspect from the start (first person) |
 | `cs3d:setView` | `id`, `view` (`fp` or `orbit`) | Changes the view, reloading the combo in it |
 | `cs3d:getState` | `id` | Asks for `cs3d:state` |
+| `cs3d:capture` | `id` | With `capture=1` and a combo loaded: asks for `cs3d:captured`. Otherwise `cs3d:error` `bad-params` (the combo shown stays) |
 | `cs3d:loseContext` | `id` | Testing only, with `debug=1`: loses the WebGL context as a GPU reset would |
 
 Commands sent before `cs3d:ready` aren't lost: the embed keeps them from its first script on and handles them in order.
@@ -84,6 +92,39 @@ Commands sent before `cs3d:ready` aren't lost: the embed keeps them from its fir
 
 The `message` is plain English for people, e.g. "Unknown knife (item 9999)." or "knife_float 0.5 is outside Karambit |
 Doppler (Ruby)'s range (0 to 0.08).". With `ui=1` the embed shows it too.
+
+## Capturing
+
+For Combo Skin's screenshots (the worker in [`worker/`](../worker/README.md)). With `capture=1`:
+
+- **A fixed frame**: the view is 1920×1080 CSS pixels whatever the window's size, drawn at pixel ratio 1, without the
+  adaptive resolution; antialiasing and the map's post-processing as on the site. `ui=0` is implied. A browser window
+  of 1920×1080 at device scale 1 shows it whole.
+- **A still pose**: the hands' sway is off and the knife's idle is held at its start (time 0) on every frame, so every
+  frame of a loaded combo is the same, and two shots of the same combo are identical.
+- **`cs3d:captureReady`**: posted after `cs3d:loaded` once every file has loaded, the map's background is decoded and in
+  the page, and two frames have been drawn with that still true (the glove composites and the texture uploads happen in
+  the first). Wait for it before capturing.
+- **`cs3d:capture`**: the reply `cs3d:captured` holds the frame as the page shows it: the map's background (drawn as CSS
+  draws it, `object-fit: cover`) with the 3D view over it, encoded as PNG. The 3D view is drawn and read in the same
+  task, so its drawing buffer can't have been cleared: a shot is never blank. `coverage` says how much of the frame the
+  3D view drew (about 0.2 for a combo in first person; 0 would mean an empty view). The background is fetched with CORS
+  in this mode (the asset host allows the viewer's origins), so the frame can be read back.
+- Use the `id` of the `cs3d:load` for the capture too, and check `release` (the asset release drawn).
+
+**Not framed.** The worker opens `/combo?capture=1` itself, in its own browser, without a parent page. Such a page
+can't post to a parent: it dispatches each of its messages on its own window as a `cs3d` DOM event (`event.detail` is
+the message), and takes commands posted to itself (`window.postMessage(command, location.origin)`, from an origin on
+the list below). The reply to `cs3d:capture` is named `cs3d:captured` so it can't be mistaken for the command.
+
+```js
+// In the page (the worker injects this before the page's scripts run).
+addEventListener('cs3d', (e) => console.log(e.detail.type))
+window.postMessage({ type: 'cs3d:load', id: 'job1', combo: { knife: 507, knife_paint: 415, knife_float: 0.01, gloves: 5034, gloves_paint: 10033, gloves_float: 0.15 } }, location.origin)
+// … cs3d:loaded, cs3d:captureReady { id: 'job1' } …
+window.postMessage({ type: 'cs3d:capture', id: 'job1' }, location.origin)
+// … cs3d:captured { id: 'job1', png: Blob, width: 1920, height: 1080, coverage: 0.22 }
+```
 
 ## Origins
 

@@ -18,6 +18,15 @@ extracted/
 *.glsl
 items_game.txt
 
+# Rendered screenshots and other images made from the game's assets
+*.png
+*.jpg
+
+# The screenshot worker's viewer build, browser profile and test files
+worker/viewer-dist/
+worker/test/.tmp/
+chrome-profile/
+
 node_modules/
 dist/
 .env

@@ -52,6 +52,11 @@ export const COMBO_KEYS = ['knife', 'knife_paint', 'knife_float', 'knife_seed', 
 
 /** The pattern seeds the game uses. */
 const SEED_RANGE = [0, 1000] as const
+/**
+ * The seed drawn when the page gives none: Combo Skin sends none for a combo without seeds, both for its screenshot and
+ * for its 3D view, so the two agree.
+ */
+export const DEFAULT_SEED = 0
 /** How far past a finish's float range a float may be and still be drawn (at the range's end): rounding on the page's side. */
 const FLOAT_SLACK = 1e-4
 
@@ -128,9 +133,7 @@ export function resolveCombo(input: ComboInput | null | undefined, catalog: Cata
 
   const vanilla = knifeSkin.kit === VANILLA
   if (!vanilla && f.knife_float === undefined) return bad('knife_float is missing.')
-  if (!vanilla && f.knife_seed === undefined) return bad('knife_seed is missing.')
   if (f.gloves_float === undefined) return bad('gloves_float is missing.')
-  if (f.gloves_seed === undefined) return bad('gloves_seed is missing.')
   const knifeFloat = vanilla ? f.knife_float ?? 0 : inRange(knifeSkin, f.knife_float!, 'knife_float', catalog)
   if (isError(knifeFloat)) return knifeFloat
   const gloveFloat = inRange(gloveSkin, f.gloves_float, 'gloves_float', catalog)
@@ -144,14 +147,15 @@ export function resolveCombo(input: ComboInput | null | undefined, catalog: Cata
   }
   const agentIndex = agents.agent.get(agentId)?.index ?? 0
 
-  const knifeSeed = f.knife_seed ?? 0
+  const knifeSeed = f.knife_seed ?? DEFAULT_SEED
+  const glovesSeed = f.gloves_seed ?? DEFAULT_SEED
   return {
     knife: { item: knifeItem, kit: knifeSkin.kit, float: knifeFloat, seed: knifeSeed },
-    gloves: { item: glovesItem, kit: gloveSkin.kit, float: gloveFloat, seed: f.gloves_seed },
+    gloves: { item: glovesItem, kit: gloveSkin.kit, float: gloveFloat, seed: glovesSeed },
     agent: agentId,
     combo: {
       knife: f.knife, knife_paint: knifePaint, knife_float: knifeFloat, knife_seed: knifeSeed,
-      gloves: f.gloves, gloves_paint: f.gloves_paint, gloves_float: gloveFloat, gloves_seed: f.gloves_seed,
+      gloves: f.gloves, gloves_paint: f.gloves_paint, gloves_float: gloveFloat, gloves_seed: glovesSeed,
       agent: agentIndex,
     },
   }

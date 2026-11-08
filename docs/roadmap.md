@@ -8,8 +8,8 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 1. Pipeline spike | Our own pipeline feeding the ChainSkins-based viewer: Karambit \| Doppler (Ruby) in Specialist Gloves \| Crimson Kimono, first person, Terrorist arms | Done |
 | 2. One combo, right | The phase 1 combo matching the game side by side, with the inspect animation, on Vertigo. In parts A to D (below), one branch and pull request each | Done |
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | Done |
-| 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | In review |
-| 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent) | |
+| 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | Done |
+| 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent): the worker ([worker/](../worker/README.md)) | In review |
 | 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
 
 ## Decisions
@@ -530,7 +530,7 @@ Part B is complete (merged). Phase 4 followed.
 
 ## Phase 4: the embed (branch `phase-4-embed`)
 
-Status: **done, in review**. The contract is [embed.md](embed.md); checks and their data in
+Status: **done** (PR #9). The contract is [embed.md](embed.md); checks and their data in
 `C:\cs2-data\reference\compare\p4\` (tools: `C:\cs2-data\tools\embed-check.mjs`, `ff-handshake.mjs`).
 
 - [x] Design agreed: `/combo` with items by index, the `cs3d:` protocol with ids, origins, headers, hosting on Pages.
@@ -673,7 +673,107 @@ installed and a deploy by hand after each merge.
 
 #### Where it stopped
 
-Phase 4 is complete and in review. Next: phase 5, the screenshot worker (notes below).
+Phase 4 is complete (merged). Phase 5 followed.
+
+## Phase 5: the screenshot worker (branch `phase-5-worker`)
+
+Status: **done, in review**. The worker is [`worker/`](../worker/README.md); the API's side is Combo Skin's spec 015
+(`api/README.md`, "Screenshots"). Checks and PNGs in `C:\cs2-data\reference\compare\p5\` (`timings.json`).
+
+- [x] Design agreed (2026-11-08): capture mode in `/combo`; Chrome over the DevTools protocol, no packages; the
+  worker's own build pinned to a release on 127.0.0.1:5321; settings from the environment; once or polling; the Mac.
+- [x] The embed: `capture=1`, `cs3d:captureReady`, `cs3d:capture` → `cs3d:captured`; seeds optional (default 0).
+- [x] The worker: config, API client, loop, renderer, server, build; the PNG checks and text chunks.
+- [x] Tests against a fake API that follows the contract (25), and the end-to-end run with Chrome and R2.
+- [x] Docs: embed.md ("Capturing", seeds), worker/README.md (with the Mac), architecture, this page.
+- [ ] The first run against the real API, on the Mac, after the merge (worker/README.md, "On the Mac"), and its timings.
+
+#### What was built
+
+- **Capture mode in `/combo`** (`capture=1`): the view fixed at 1920×1080 CSS pixels at pixel ratio 1 (no adaptive
+  resolution), `ui=0`, the sway off and the pose held at the idle's time 0 (`SkinViewer.setStillTime`), the map's
+  background fetched with CORS (`readableBackground`; only in this mode, so the site's pages are unchanged).
+  `cs3d:captureReady` comes after `loaded`, once every file is in, the background is decoded, and two frames are drawn
+  with that true. `cs3d:capture` composes the background (`object-fit: cover`, as CSS draws it) and the WebGL frame,
+  drawn and read in the same task (`SkinViewer.captureCanvas`), and answers `cs3d:captured` with the PNG and
+  `coverage`, the share of the frame the 3D view drew (0 would be a cleared frame; about 0.2 here).
+- **Not framed**: an embed without a parent used to post nothing; it now dispatches its messages on its own window as
+  `cs3d` DOM events (`origins.ts`). The worker injects a listener before the page's scripts and passes them out through
+  a DevTools binding. The reply is `cs3d:captured`, not `cs3d:capture`, so it can't be read back as the command.
+- **Seeds optional**: `knife_seed` and `gloves_seed` may be left out, drawn as 0 (`DEFAULT_SEED` in `combo.ts`). The
+  API sends a null seed for a combo without seed conditions, and the site's View in 3D will send the same, so the
+  screenshot and the 3D view agree.
+- **The worker** (plain Node, no packages; Node 24): `src/config.mjs` (the environment; the token kept out of the
+  config's fields), `api.mjs` (the worker routes; no `Origin` header; redirects refused, so the token can't follow
+  one), `worker.mjs` (claim → render → check → upload; the failure table in its README), `renderer.mjs` and
+  `chrome.mjs` (one Chrome, one page, the DevTools protocol over Node's `WebSocket`), `server.mjs` (the build with
+  `_headers`' headers; port 5321 or a clear stop), `png.mjs` (chunks, `tEXt`, decode, blank check), `build.mjs` (the
+  pinned build and `worker-build.json`: release, asset host, commit).
+- **Choices made on the way**: a frame that is blank, transparent, the wrong size, or whose `coverage` is under 1% is
+  never sent (`render_failed`); a timeout or a crash starts the next job in a fresh page; `assets-unavailable` and
+  `context-lost` get one more try in a fresh page; `--once` gives up on an API that doesn't answer after three tries
+  (polling keeps waiting for it).
+
+#### Checks
+
+On this PC (Intel UHD Graphics, Chrome with ANGLE on Direct3D 11), the build pinned to `3de0d6e58111`, assets from R2:
+
+- **Tests** (`npm test`, 25): the PNG code; the settings (the token's form, https unless local, the timeout's range;
+  the token never in the config's fields, an error or a log line); the job's mapping (null seeds and a vanilla knife's
+  float left out); the client against the fake API (401, 403 with `Origin`, no `Origin` sent, claim and 204, the
+  upload's 413 / 415 / 422s, a PNG with the text chunks stored as sent, 409 `claim_expired` / `inputs_changed`, 404
+  `job_not_found`, fail and release with their reasons); the loop (a blank or transparent frame never sent; lost jobs
+  logged without a report; a 415 reported as `render_failed` with the code; a stop releases the claim; no GPU releases
+  it as `gpu_unavailable` and stops; a revoked token stops with exit 2; an API that is down ends `--once`; polling
+  picks up a combo that becomes due); the server (port in use, headers, paths kept inside the build).
+- **End to end** (`npm run e2e`): every capture is 1920×1080, not blank, and **identical to Chrome's own screenshot of
+  the page** (mean difference 0.000); warm shots are identical to the cold one. Then `node src/main.mjs --once` against
+  the fake API: exit 0, five stored, each with its text chunks and identical to the captures, the token nowhere in the
+  output. The combo without seeds equals the reference drawn with both seeds 0 (and differs from seeds 1 / 269 in 2.6%
+  of its pixels, so the check means something).
+- **Port 5321 taken**: the worker stops with exit 3 and a message naming the port. No Chrome was left running after any
+  run.
+
+#### Timings
+
+Per combo, from `cs3d:load` to the PNG in the worker. Cold: a new browser with a new profile (no HTTP or shader cache).
+Warm: the same browser, after another combo, three shots. The browser starts in 0.5 s.
+
+| Combo | Cold | Warm | In the worker's queue run (one fresh browser, in this order) |
+| --- | ---: | ---: | ---: |
+| Reference (Ruby Karambit, Crimson Kimono, Ricksaw) | 4.6–5.5 s | 2.8–2.9 s | 5.0 s (first) |
+| Big Swell (v2 glove) | 13.5–13.8 s | 3.5–4.1 s | 15.3 s |
+| Vanilla Butterfly Knife | 4.1 s | 2.5–3.1 s | 3.8 s |
+| Bloody Darryl The Strapped | 4.7–4.9 s | 2.8–2.9 s | 3.7 s |
+| Reference without seeds | | | 3.0 s |
+
+The queue run of five took 32 s, browser start included. A warm shot is slower than phase 4's 0.6–1.4 s switch
+because it also waits for the still frames and encodes and moves a 2.4 MB PNG; the split isn't measured. Big Swell's
+cold shot is its shader compile (phase 3A); the profile keeps the compiled program, so it's paid once per machine and
+release.
+
+#### Where to run it
+
+The Mac (agreed): the API is there (no token on the network, nothing exposed), and Apple's GPU draws through Metal,
+where the v2 glove's compile may be shorter than Direct3D's here. Its timings come from the first run there. A server
+without a GPU would draw with SwiftShader: much slower, and not tested.
+
+#### Where it stopped
+
+Built, tested here, in review. Next: merge, then the first run on the Mac against the real API (worker/README.md, "On
+the Mac"), and its timings in this section.
+
+## Phase 6 notes (from phase 5)
+
+- **Measure on the Mac**: cold and warm per combo, and whether Metal compiles the v2 glove's combo 7 faster.
+- **A warm shot's 2.8 s**: split it (load, still frames, `toBlob`, the transfer) before optimising; the PNG encode of
+  1920×1080 is likely a large part. A queue of thousands at 3 s is a few hours, fine for now.
+- **Ctrl+C on Windows** wasn't tried (Node can't send a child process SIGINT on Windows); the stop path is covered by
+  the tests and will be seen on the Mac.
+- **The site's View in 3D** must leave seeds out exactly as the job does (null → left out), or the 3D view and the
+  screenshot differ.
+- **RENDER_REVISION**: the worker has its own (1, `src/main.mjs`) and warns when a job's differs. Raise both when the
+  viewer changes how combos look.
 
 ## Phase 5 notes (from phase 4)
 
