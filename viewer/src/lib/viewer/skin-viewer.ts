@@ -560,9 +560,17 @@ export class SkinViewer {
     this.resizeObserver.disconnect()
     this.renderer.setAnimationLoop(null)
     this.controls.dispose()
-    this.renderer.dispose()
-    this.renderer.domElement.remove()
     this.map.dispose()
+    this.renderer.dispose()
+    // Releases the WebGL context now rather than at garbage collection: browsers keep only about 16 live, and a page
+    // that rebuilds its viewer (a context loss, a change of antialiasing) would otherwise pile them up.
+    if (!this.renderer.getContext().isContextLost()) this.renderer.forceContextLoss()
+    this.renderer.domElement.remove()
+  }
+
+  /** Removes what is shown (the background stays). */
+  unload(): void {
+    this.clear()
   }
 
   /**

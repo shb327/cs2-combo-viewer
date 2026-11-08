@@ -35,3 +35,8 @@ export function resetLoadProgress(): void {
   shown = 0
   notify()
 }
+
+/** Files finished and started since the current load began (the counts behind the share). */
+export function loadCounts(): { loaded: number; total: number } {
+  return { loaded: Math.max(0, finished - base), total: Math.max(0, started - base) }
+}
