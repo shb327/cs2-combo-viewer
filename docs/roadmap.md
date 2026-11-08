@@ -399,16 +399,17 @@ the viewer on the right, knives tilted and seen from the back as in the game's).
   painted parts on the right model. What differs is light: the game's pictures use a bright, reflective rig, so the
   viewer's studio renders are darker and less saturated, metals most (Scorched on the Karambit is mostly dark where the
   game shows bright steel; Blued Steel and Forced are duller; Tiger Tooth is brownish orange against bright yellow).
-  Where Oiled's pattern sits differs (the picture's seed is unknown).
+  Where Oiled's pattern sits differs (the picture's seed is unknown). Cause and fix: see "Look pass" below.
 - **Gloves**, one finish per type: all 8 have the right print on the right panels at the right scale (the hand wraps'
   camo, the motorcycle's stripe, the brocade crane, the Specialist "TORTUE" plates, the beadwork, the three studded
   gloves' emblems). Differs: **Sport Gloves | Beadwork** (a newer glove): the game's finger panels are pearlescent
   lilac, the viewer's dull grey-beige; likely the final glove material (cloth sheen or an iridescent layer) rather than
-  the composite. To look at. Metals (studs, the Hydra's emblem) are duller, as with the knives.
+  the composite. To look at. Metals (studs, the Hydra's emblem) are duller, as with the knives. (Look pass: the
+  pattern is there, on the palm side; the light was the cause.)
 - **Agents** (Ricksaw, Bloody Darryl The Strapped, B Squadron Officer, a Leet and a Guerrilla agent, the Diver): the
   game's pictures are third-person portraits, so only the sleeves can be compared. The SAS camo, Ricksaw's and the
   Guerrilla's bare forearms and Darryl's watch match; the Diver's wetsuit sleeve is near black in the viewer against
-  blue grey in the picture (the light, or the material: to look at).
+  blue grey in the picture (the light, or the material: to look at; see "Look pass").
 
 #### The v2 glove's slow first render
 
@@ -762,6 +763,65 @@ without a GPU would draw with SwiftShader: much slower, and not tested.
 
 Built, tested here, in review. Next: merge, then the first run on the Mac against the real API (worker/README.md, "On
 the Mac"), and its timings in this section.
+
+## Look pass (branch `look-pass`)
+
+The known differences from the game (phase 3A's spot checks), each traced to its cause. Images in
+`C:\cs2-data\reference\compare\look\` (`SHEET-knives-before-after.png`, `SHEET-gloves-before-after.png`,
+`SHEET-beadwork.png`, `exp-diver.png`, `REFERENCE-side-by-side.png`); tools in `C:\cs2-data\tools` (`lumstats.mjs`,
+`look-sheet.mjs`, `render-eval.mjs`, `combo-capture.mjs`).
+
+**The references.** The site's finish pictures (Steam's image CDN, the `image` URLs in the pinned `skins.json`) are the
+game's own item images: Karambit | Scorched and Sport Gloves | Violet Beadwork fetched from the CDN (two requests, 10 s
+apart) are identical in every statistic to `panorama/images/econ/default_generated/…_light_png` from the copies. So the
+copies are the reference and Steam's item pages weren't needed. The rig the game renders those images with isn't in the
+copies.
+
+**Where each view gets its light.** Combo screenshots and `/combo` draw first person on Vertigo: the map's sun, its
+ambient cube and its reflections at full strength (phase 2A). The **studio** (`map=studio`, a transparent background:
+the pipeline's contact sheets and spot checks; also phones, which get no map) has the key and rim lights and three's
+room environment. Every difference below was seen in the studio.
+
+- **Metals dark in the studio (fixed).** The studio set `environmentIntensity` to the ambient (0.45), which scales the
+  environment's reflections as well as its fill. Metals are almost all reflection, so they got under half of it:
+  Scorched (whose paint is metallic: metalness 1, 1, 0.75, 1, tan and grey tints) came out brown, Tiger Tooth orange
+  brown, Stained (`aq_forced`; phase 3A called it Forced) grey. Fitted against all 28 spot-check images (mean
+  luminance, saturation and the share of highlights; `lumstats.mjs`) over six settings: the studio now reflects at 1.5
+  and fills at 1.0 (at the default ambient, which scales both: `STUDIO_ENVIRONMENT` in `viewer-options.ts`), the fill
+  held down with the same patch the game-lit views use (`FixedInspect.setOpenEnvDiffuse`). Mean brightness error
+  against the game's images 42 → 15 levels (metals 58 → 18), saturation error halved; overall level 83 → 129 (the
+  game's: 125). Left: chrome-like finishes are still duller than the game's (Stained 155 against 212), and the Doppler
+  family a little brighter than the game's (Ruby 125 against 81): one environment can't match the game's rig, which
+  has sharper, brighter highlights over a darker surround.
+- **Sport Gloves | Beadwork's pearlescent lilac (not a bug; fixed with the light).** The lilac is the paint's pattern
+  (`graphic_blorb_purple`, pink and blue swirls) on the **palm side** of the fingers (`g_bId8Pattern`). The composited
+  albedo has it, at the game's colours; phase 3A's spot check compared the backs of the hands with an image whose right
+  glove shows its palm. With the studio fix the palm-side fingers read light and lilac as in the game.
+- **The Diver's sleeve near black (most likely right; needs an in-game shot).** In first person the camera sees the
+  wetsuit texture's dark grey panel (about 64, 64, 64; the blue panel is on the underside) times the material's
+  blue-grey `g_vColorTint`: dark grey by design. The game's portrait shows the third-person body's wetsuit, another
+  material. UVs aren't mirrored (glove text reads right). On Vertigo it renders dark blue-grey; in the old studio near
+  black. To confirm: an in-game first-person screenshot of Cmdr. Davida 'Goggles' Fernandez | SEAL Frogman.
+
+**Combos unchanged.** The four test combos captured through `/combo?capture=1` (the reference, Karambit | Scorched in
+Violet Beadwork, Karambit | Tiger Tooth in Crimson Kimono, the reference with the Diver) are pixel-identical before
+and after (mean difference 0, max 0): the change is in the studio only, so Combo Skin's screenshots don't need
+redrawing and `RENDER_REVISION` stays.
+
+Also in this branch: `X-Robots-Tag: noindex` for the `*.pages.dev` address (a host rule in `viewer/public/_headers`).
+
+#### Where it stopped
+
+Done, in review. The full check after the change (`node pipeline\check.mjs --out look-check`, local assets, then
+`--shaders`): **all 753 pass** (576 knife finishes, 94 glove finishes, 20 knives in first person, 63 agents; average
+warm loads 0.9, 0.9, 1.6 and 1.1 s) and all 1,158 compositing shaders compile and link; sheets in
+`C:\cs2-dataeference\compare\look-check\`, now in the brighter studio. Looked through: the 28 spot items side by side
+with the game, and the Karambit, Specialist, Sport and Hydra sheets; no other finish looked clearly wrong. No asset
+changed (viewer code only), so nothing to upload.
+
+Next: an in-game first-person screenshot of the Diver (above) to settle the sleeve; optionally one of a bare-metal
+knife in first person on Vertigo (for example Karambit | Scorched) to check metals in the combo view, which this pass
+didn't change.
 
 ## Phase 6 notes (from phase 5)
 
