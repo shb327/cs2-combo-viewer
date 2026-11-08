@@ -55,11 +55,39 @@ function localAssets(dir: string): Plugin {
   }
 }
 
+/**
+ * public/_headers (Cloudflare Pages' format) on vite preview too, so the production build is checked under the same
+ * Content-Security-Policy and frame-ancestors as the hosted viewer. Not in development: Vite's dev client needs inline
+ * scripts.
+ */
+function previewHeaders(): Plugin {
+  const rules: Array<{ pattern: RegExp; headers: Array<[string, string]> }> = []
+  const glob = (p: string) => new RegExp('^' + p.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$')
+  for (const line of readFileSync('public/_headers', 'utf8').split(/\r?\n/)) {
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    if (!/^\s/.test(line)) rules.push({ pattern: glob(line.trim()), headers: [] })
+    else {
+      const i = line.indexOf(':')
+      rules[rules.length - 1]?.headers.push([line.slice(0, i).trim(), line.slice(i + 1).trim()])
+    }
+  }
+  return {
+    name: 'preview-headers',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = (req.url ?? '/').split('?')[0]
+        for (const rule of rules) if (rule.pattern.test(url)) for (const [k, v] of rule.headers) res.setHeader(k, v)
+        next()
+      })
+    },
+  }
+}
+
 const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
 
 export default defineConfig(({ mode }) => ({
   define: { __APP_VERSION__: JSON.stringify(version) },
-  plugins: [react(), tailwindcss(), localAssets(loadEnv(mode, process.cwd(), '').CS2_ASSET_DIR || DEFAULT_ASSET_DIR), publicWithoutAssets()],
+  plugins: [react(), tailwindcss(), localAssets(loadEnv(mode, process.cwd(), '').CS2_ASSET_DIR || DEFAULT_ASSET_DIR), publicWithoutAssets(), previewHeaders()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   server: { port: 5320, strictPort: true, host: '127.0.0.1' },
   preview: { port: 5321, strictPort: true, host: '127.0.0.1' },

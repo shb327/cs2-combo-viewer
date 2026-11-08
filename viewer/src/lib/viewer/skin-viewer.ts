@@ -1,5 +1,6 @@
 import { IS_MOBILE_DEVICE } from '@/lib/device'
 import * as THREE from 'three'
+import { disposeMaterials } from '@/lib/viewer/dispose'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -560,9 +561,17 @@ export class SkinViewer {
     this.resizeObserver.disconnect()
     this.renderer.setAnimationLoop(null)
     this.controls.dispose()
-    this.renderer.dispose()
-    this.renderer.domElement.remove()
     this.map.dispose()
+    this.renderer.dispose()
+    // Releases the WebGL context now rather than at garbage collection: browsers keep only about 16 live, and a page
+    // that rebuilds its viewer (a context loss, a change of antialiasing) would otherwise pile them up.
+    if (!this.renderer.getContext().isContextLost()) this.renderer.forceContextLoss()
+    this.renderer.domElement.remove()
+  }
+
+  /** Removes what is shown (the background stays). */
+  unload(): void {
+    this.clear()
   }
 
   /**
@@ -848,10 +857,16 @@ export class SkinViewer {
   }
 
   private clear(): void {
+    const materials = new Set<THREE.Material>()
     for (const child of [...this.holder.children]) {
       this.holder.remove(child)
-      child.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose() })
+      child.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        o.geometry.dispose()
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m)
+      })
     }
+    disposeMaterials(materials)
     for (const finish of this.loaded.finishes) finish.dispose()
     for (const dispose of this.loaded.disposables) dispose()
     this.loaded.finishes.length = 0
@@ -1190,3 +1205,4 @@ export class SkinViewer {
     this.map.render()
   }
 }
+

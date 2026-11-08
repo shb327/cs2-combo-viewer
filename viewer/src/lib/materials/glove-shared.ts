@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { disposeMaterial } from '@/lib/viewer/dispose'
 import { SHADER_DIR, comboId, fallbackTexture, loadCombo, type ComboInfo, type CompositeTable } from '@/lib/materials/composite'
 
 /**
@@ -182,7 +183,7 @@ export class GloveTargets {
   }
 
   dispose(): void {
-    this.material.dispose()
+    disposeMaterial(this.material)
     this.resolve.dispose()
     this.target.dispose()
     for (const t of this.modes) t.dispose()

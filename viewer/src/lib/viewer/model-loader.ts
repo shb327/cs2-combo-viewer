@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { addedUniforms } from '@/lib/viewer/dispose'
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { dataPath, gamePath } from '@/lib/asset-layout'
 import { DEFAULT_AGENT, loadAgents, type AgentModel } from '@/lib/data/agents'
@@ -162,6 +163,7 @@ export class ModelLoader {
       t.load(GAME_ROOT + path, srgb).then((tex) => { m[key] = tex; if (key === 'roughnessMap') m.metalnessMap = tex; m.needsUpdate = true }).catch(() => {})
     }
     const anisoGloss = { value: null as THREE.Texture | null }
+    addedUniforms(m, { anisoGloss })
     if (character && call.aniso) {
       t.load(GAME_ROOT + call.aniso, false).then((tex) => { anisoGloss.value = tex }).catch(() => {})
       m.customProgramCacheKey = () => 'character-aniso'

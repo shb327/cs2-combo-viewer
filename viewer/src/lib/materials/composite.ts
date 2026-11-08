@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { disposeMaterial } from '@/lib/viewer/dispose'
 import { VIEWER_DATA } from '@/lib/asset-layout'
 import { evalExpr, vec, type ExprContext, type Instr, type Value } from '@/lib/materials/composite-expr'
 
@@ -153,7 +154,7 @@ class CompositePass {
   }
 
   dispose(): void {
-    this.material.dispose()
+    disposeMaterial(this.material)
     this.quad.geometry.dispose()
     this.target.dispose()
     for (const d of this.disposers) d()
@@ -285,6 +286,8 @@ export function packLayers(renderer: THREE.WebGLRenderer, layers: THREE.Texture[
   renderer.setRenderTarget(previous)
   copy.dispose()
   quad.geometry.dispose()
+  // The layers were uploaded only to be copied: free them (one shared with another pack is uploaded again there).
+  for (const layer of layers) layer.dispose()
   return { texture: target.texture, dispose: () => target.dispose() }
 }
 

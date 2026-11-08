@@ -4,6 +4,7 @@ import { Spinner } from '@/components/common/spinner'
 import { HomePage } from '@/pages/home-page'
 
 const EmbedPage = lazy(() => import('@/pages/embed-page').then((m) => ({ default: m.EmbedPage })))
+const ComboPage = lazy(() => import('@/pages/combo-page').then((m) => ({ default: m.ComboPage })))
 const ApiPage = lazy(() => import('@/pages/api-page').then((m) => ({ default: m.ApiPage })))
 const SharePage = lazy(() => import('@/pages/share-page').then((m) => ({ default: m.SharePage })))
 const InspectPage = lazy(() => import('@/pages/inspect-page').then((m) => ({ default: m.InspectPage })))
@@ -64,6 +65,7 @@ export function AppRoutes() {
       <Route path="/pet/:id" element={<PetRoute />} />
       <Route path="/inspect/*" element={<InspectPage />} />
       <Route path="/share/:code" element={<SharePage />} />
+      <Route path="/combo" element={<ComboPage />} />
       <Route path="/embed" element={<EmbedPage />} />
       <Route path="/api" element={<ApiPage />} />
       <Route path="/" element={<HomePage />} />

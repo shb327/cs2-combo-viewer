@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { disposeMaterial } from '@/lib/viewer/dispose'
 import { texXform } from '@/lib/materials/weapon'
 import type { GloveItem } from '@/lib/data/items'
 import type { RandomFloat } from '@/lib/data/rng'
@@ -148,7 +149,7 @@ export class GloveFinish {
 
   dispose(): void {
     this.targets.dispose()
-    this.program.dispose()
+    disposeMaterial(this.program)
     this.quad.geometry.dispose()
   }
 }

@@ -32,22 +32,24 @@ Open questions: three.js with WebGL2 first or WebGPU first, and whether to start
 
 ## Embed API
 
-The viewer runs inside an iframe on another page and is driven by `postMessage`, in the same shape as existing viewers, so Combo Skin can switch between them behind one adapter.
+The viewer runs inside an iframe on another page (`https://view.combo.skin/combo?…`) and is driven by its URL and by
+`postMessage`. The contract, as built in phase 4, is in [embed.md](embed.md); in short:
 
 ```js
-// page → viewer
-{ type: 'load', knife: { def, paint, float, seed }, gloves: { def, paint, float, seed }, view: 'fpv', map }
-{ type: 'screenshot', id }
+// page → viewer (each with an optional id, echoed by the events it causes)
+{ type: 'cs3d:load', id, combo: { knife, knife_paint, knife_float, knife_seed, gloves, gloves_paint, gloves_float, gloves_seed, agent }, view: 'fp' }
+{ type: 'cs3d:inspect' }  { type: 'cs3d:setView', view }  { type: 'cs3d:getState', id }
 
 // viewer → page
-{ type: 'ready' }
-{ type: 'progress', percent }
-{ type: 'loaded' }
-{ type: 'error', code, message }
-{ type: 'screenshot', id, png }
+{ type: 'cs3d:ready', version, release, webgl2 }
+{ type: 'cs3d:progress', id, loaded, total }
+{ type: 'cs3d:loaded', id, combo, view, release, ms }
+{ type: 'cs3d:error', id, code, message, retryable }
+{ type: 'cs3d:recovering', id, reason }
 ```
 
-The viewer checks the origin of every message, and only pages on an allowlist may frame it.
+The viewer accepts messages only from an allowlist of origins and posts only to its parent's, and only Combo Skin's
+pages (and local development pages) may frame it.
 
 ## Render service
 
