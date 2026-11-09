@@ -37,6 +37,9 @@ All paths inside the JSON are relative to `extracted/game/` unless noted. Every 
   quality 90 with lossless alpha; every other texture near-lossless (they pack data in all four channels, which lossy
   WebP would mix); the RGB under zero alpha is kept; textures over 2048 are halved (the compositors render at 2048).
   Hosting needs only the WebPs.
+- Decoded unpremultiplied, so the RGB under zero alpha survives: `createImageBitmap` with `premultiplyAlpha: 'none'`,
+  or an `<img>` where the browser ignores that option (Safari and every iOS browser; checked at runtime by
+  `bitmapsKeepAlpha()` in `lib/viewer/textures.ts`; see the roadmap, "Safari").
 - Float textures (the weapons' position maps) are `.exr`, loaded as is.
 - sRGB or linear is decided by the caller: base colours, grunge and AO are sRGB; normals, masks, roughness, wear are linear. For the compositing shaders, each texture follows the shader's own `SrgbRead` flag (`ps[name].srgb` in the shader table), the pattern being sRGB only for paint styles 6 and up.
 - Classic glove kits keep their material's `.vtex` paths; the viewer swaps `.vtex` for `.png`.
