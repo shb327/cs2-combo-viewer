@@ -823,6 +823,56 @@ Next: an in-game first-person screenshot of the Diver (above) to settle the slee
 knife in first person on Vertigo (for example Karambit | Scorched) to check metals in the combo view, which this pass
 didn't change.
 
+## Safari (branch `safari-fix`)
+
+**Seen**: in Safari (macOS 27.2, Safari 27.2, Apple M4 Pro) every composited finish drew wrong; Chrome on the same Mac
+was right. Bloodhound Gloves | Charred came out tan with black studs and blotches instead of dark leather with a silver
+skull, the Ruby Karambit blue instead of red; every glove type, classic and newer, and every knife finish tried was
+off. iOS Safari (the simulator, iOS 26.3) the same, in the studio. Images, tools and logs in
+`/Users/bohdan/Documents/cs2-viewer-safari/` on the Mac (outside git).
+
+**Cause**: Safari's `createImageBitmap` ignores `premultiplyAlpha: 'none'`: the bitmap comes back premultiplied, so
+a pixel's RGB is zero wherever its alpha is zero, and rounded where alpha is low. The viewer decodes every texture that
+way (`lib/viewer/textures.ts`), and its data textures keep values under zero alpha (the Karambit's composite masks have
+alpha 0 throughout: Safari read them as all zero; the paint mask, the surface map and the glove AO likewise). The
+compositors then paint with empty masks. Measured by decoding the same WebPs in both browsers and reading them back
+through WebGL: Chrome's bitmaps and `<img>`s agree byte for byte, Safari's `<img>`s match them, its bitmaps don't. Not
+the shaders: no compile or link log, WebGL error or console error in either browser, and Chrome on the Mac runs the
+same ANGLE-on-Metal. Every browser on iOS uses Safari's engine, so it has the same limit.
+
+**Fix** (viewer code only, no asset change): `bitmapsKeepAlpha()` decodes a 1×1 PNG of (255, 128, 0) under alpha 0
+with the viewer's options, uploads it to a WebGL2 context of its own and reads it back, once per page. Where the
+colour survives (Chrome) textures load as before; where it doesn't, they load through an `<img>`, which
+WebGL uploads unpremultiplied (three.js sets `UNPACK_PREMULTIPLY_ALPHA_WEBGL` false). In Safari a combo is ready to
+capture in 3.0 to 4.2 s from R2 (warm), on average 0.4 s later than before (3.6 s against 3.2 s over the 15 below,
+one run each): the `<img>`s are decoded again on upload.
+
+**Checks** (production builds pinned to `3de0d6e58111`, assets from R2; Safari driven by `safaridriver`, Chrome
+headless with the worker's flags):
+
+- **Chrome unchanged**: the four test combos (the reference, Bloodhound | Charred with the Ruby Karambit, Big Swell, the
+  vanilla Butterfly) and eleven more, captured through `/combo?capture=1` before and after: **pixel-identical** (0
+  pixels differ). Combo Skin's screenshots don't need redrawing; `RENDER_REVISION` stays.
+- **Safari against Chrome**, the same 15 combos (every glove type: Hand Wraps, Moto, Driver classic and Brocade Crane,
+  Sport classic and Violet Beadwork, Bloodhound Charred, Bronzed and Snakebite, Broken Fang, Hydra, Specialist classic
+  and Big Swell; knife finishes Ruby, Fade, Case Hardened, Crimson Web, Marble Fade, Scorched, Ultraviolet, Gamma
+  Doppler (Emerald), Slaughter, vanilla): the 3D view is identical to Chrome's; only the photo background differs a
+  little (Safari resamples it differently: mean 0.7 levels over the frame, max 35). Before the fix the mean was 6 to 10
+  levels, up to 255. No console, shader or WebGL error.
+- **The studio** (`/embed?…&map=studio`, the gloves alone and the Ruby in Charred in first person) and **iOS Safari**
+  (`/combo` on an iPhone 17 Pro simulator, which draws the studio as phones do: Charred, the reference, Big Swell):
+  wrong before, right after.
+
+**Safari's limits, for later work**:
+
+- Never rely on `createImageBitmap`'s `premultiplyAlpha: 'none'` (nor assume `colorSpaceConversion: 'none'` is the only
+  thing that matters): decode data textures through `<img>` there, or check with `bitmapsKeepAlpha()`.
+- Safari's WebDriver needs Develop → "Allow remote automation", `safaridriver --enable` once, and Safari restarted
+  after; a second page in one automation session drew at a crawl, so each check used a new session.
+- On the Vite dev server a `cs3d:load` posted right after the page loaded was sometimes never acted on in Safari (2 of
+  7 loads in fresh sessions; no progress, no error). Not seen in 40 loads of the production build in Safari and the iOS
+  simulator; to look at if it ever shows on the site.
+
 ## Phase 6 notes (from phase 5)
 
 - **Measure on the Mac**: cold and warm per combo, and whether Metal compiles the v2 glove's combo 7 faster.
