@@ -4,17 +4,62 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 /** The textures are served as WebP (steam-tools/cs2-3d-pipeline/build_webp.mjs converts them): the data's .png paths load as .webp. */
 export const imagePath = (path: string): string => path.replace(/\.png$/i, '.webp')
 
+const BITMAP_OPTIONS: ImageBitmapOptions = { imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
+
+/** A 1×1 PNG of (255, 128, 0) under alpha 0. */
+const PROBE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP438DAAAAFgQGAX/d3agAAAABJRU5ErkJggg=='
+
+let bitmapCheck: Promise<boolean> | null = null
+
+/**
+ * Whether createImageBitmap keeps a pixel's colour under zero alpha, as `premultiplyAlpha: 'none'` asks. Safari (and
+ * so every browser on iOS) ignores the option: its bitmaps come premultiplied, so a texture's RGB is zero wherever its
+ * alpha is and rounded where alpha is low. The viewer's data textures keep values there (the knives' composite masks
+ * have zero alpha throughout), and the composites then paint the wrong colours. Checked once, by uploading a bitmap of
+ * PROBE_PNG to a WebGL2 context of its own and reading it back. If the check itself fails, bitmaps are used as before.
+ */
+export function bitmapsKeepAlpha(): Promise<boolean> {
+  bitmapCheck ??= (async () => {
+    let gl: WebGL2RenderingContext | null = null
+    try {
+      const bytes = Uint8Array.from(atob(PROBE_PNG), (c) => c.charCodeAt(0))
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }), BITMAP_OPTIONS)
+      gl = document.createElement('canvas').getContext('webgl2')
+      if (!gl) return true
+      gl.bindTexture(gl.TEXTURE_2D, gl.createTexture())
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
+      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap)
+      bitmap.close()
+      const fb = gl.createFramebuffer()
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, gl.getParameter(gl.TEXTURE_BINDING_2D), 0)
+      const px = new Uint8Array(4)
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)
+      return px[0] > 200 && px[1] > 100
+    } catch {
+      return true
+    } finally {
+      gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+  })()
+  return bitmapCheck
+}
+
 /** Loads textures relative to an asset base, with the glTF UV convention (no vertical flip). */
 export class TextureSource {
-  private readonly loader = new THREE.TextureLoader().setCrossOrigin('anonymous')
   /**
    * Images decoded off the main thread as each one arrives (an <img> is decoded when it is first drawn: for a combo's
    * forty-odd textures, seconds on the main thread after the last byte). Stored as they are: no premultiplied alpha
    * (normals and masks keep their RGB under zero alpha), no colour conversion, no flip (the glTF convention).
+   * Where bitmaps lose the colour under zero alpha (bitmapsKeepAlpha: Safari), an <img> instead: WebGL uploads it
+   * unpremultiplied (three.js sets UNPACK_PREMULTIPLY_ALPHA false), byte for byte what the bitmap gives elsewhere.
    */
   private readonly bitmaps = typeof createImageBitmap === 'function'
-    ? new THREE.ImageBitmapLoader().setCrossOrigin('anonymous').setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+    ? new THREE.ImageBitmapLoader().setCrossOrigin('anonymous').setOptions(BITMAP_OPTIONS)
     : null
+  private readonly images = new THREE.ImageLoader().setCrossOrigin('anonymous')
   private readonly anisotropy: number
   /** 1×1 white, for optional inputs an item doesn't have. */
   readonly blank: THREE.DataTexture
@@ -47,19 +92,20 @@ export class TextureSource {
    * Decoded images by URL, kept for half a minute after they arrive: a knife's finish and its composite ask for the
    * same files, the composite a little later (after its shader). Enough for one item's load, then let go.
    */
-  private readonly decoding = new Map<string, Promise<ImageBitmap>>()
+  private readonly decoding = new Map<string, Promise<ImageBitmap | HTMLImageElement>>()
 
   private async image(url: string): Promise<THREE.Texture> {
-    if (!this.bitmaps) return this.loader.loadAsync(url)
-    let bitmap = this.decoding.get(url)
-    if (!bitmap) {
-      bitmap = this.bitmaps.loadAsync(url)
-      this.decoding.set(url, bitmap)
+    let decoded = this.decoding.get(url)
+    if (!decoded) {
+      const bitmaps = this.bitmaps
+      decoded = (bitmaps ? bitmapsKeepAlpha() : Promise.resolve(false))
+        .then((ok): Promise<ImageBitmap | HTMLImageElement> => (ok && bitmaps ? bitmaps.loadAsync(url) : this.images.loadAsync(url)))
+      this.decoding.set(url, decoded)
       const forget = () => { this.decoding.delete(url) }
-      bitmap.then(() => setTimeout(forget, 30000), forget)
+      decoded.then(() => setTimeout(forget, 30000), forget)
     }
     // Each caller its own texture (the colour space differs per use); they share the decoded image.
-    const texture = new THREE.Texture(await bitmap)
+    const texture = new THREE.Texture(await decoded)
     texture.needsUpdate = true
     return texture
   }
