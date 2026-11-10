@@ -38,6 +38,8 @@ export interface MapStageHost {
   lightYaw: () => number
   /** Fetch the background with CORS, so it can be drawn into a readable canvas. */
   readableBackground?: boolean
+  /** Change maps under the veil (default true); off, the old map stays on screen until the new one replaces it. */
+  veil?: boolean
   /** Called once a map (or the studio) is in place. */
   onChange: () => void
 }
@@ -79,22 +81,27 @@ export class MapStage {
     return this.map?.video ?? null
   }
 
-  /** Puts an inspect map around the model, or back to the studio with null. */
-  async load(id: string | null): Promise<void> {
+  /**
+   * Puts an inspect map around the model, or back to the studio with null.
+   * @returns true once it is in place; false when its files couldn't be loaded (the old map stays) or a newer load
+   *   replaced it
+   */
+  async load(id: string | null): Promise<boolean> {
     const { scene, renderer } = this.host
     const token = ++this.token
+    const useVeil = this.host.veil !== false
     /** The first map of the session appears without the veil only when there was nothing to hide. */
-    const veiled = this.map !== null || id !== null
+    const veiled = useVeil && (this.map !== null || id !== null)
     if (!id) {
       if (veiled) await this.veil.cover()
-      if (token !== this.token) return
+      if (token !== this.token) return false
       this.disposeMap()
       scene.background = this.studioBackground
       scene.environment = this.studioEnvironment
       scene.backgroundIntensity = 1
       this.host.onChange()
-      this.veil.reveal()
-      return
+      if (veiled) this.veil.reveal()
+      return true
     }
     const dataBase = this.host.dataBase
     const backgroundLoad = loadScenes(dataBase).then((s) => loadBackground(dataBase + 'backgrounds/' + id, s.get(id)?.background, this.size, this.host.readableBackground))
@@ -104,7 +111,7 @@ export class MapStage {
      */
     const early = this.map === null ? backgroundLoad.then((v) => (token === this.token && v ? this.showEarly(v) : null)) : null
     const [, texture, video, scenes] = await Promise.all([
-      early ? Promise.resolve() : this.veil.cover(),
+      early || !useVeil ? Promise.resolve() : this.veil.cover(),
       loadPanorama(dataBase + 'maps/' + id),
       backgroundLoad,
       loadScenes(dataBase),
@@ -115,8 +122,8 @@ export class MapStage {
     if (!texture || !video || token !== this.token) {
       texture?.dispose(); scene3d?.dispose(); video?.remove()
       /** Failed: the old map stays. */
-      if (token === this.token) this.veil.reveal()
-      return
+      if (token === this.token && useVeil) this.veil.reveal()
+      return false
     }
     texture.mapping = THREE.EquirectangularReflectionMapping
     texture.generateMipmaps = true
@@ -143,7 +150,8 @@ export class MapStage {
     scene.backgroundIntensity = scene3d?.data.exposure ?? 1
     this.place()
     this.host.onChange()
-    if (!early) this.veil.reveal(video)
+    if (!early && useVeil) this.veil.reveal(video)
+    return true
   }
 
   /** Puts a background behind the canvas. */

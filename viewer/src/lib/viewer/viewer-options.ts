@@ -15,6 +15,18 @@ export interface SkinViewerOptions extends WeaponFinishOptions {
    * Only where the asset host allows the page's origin. Default false.
    */
   readableBackground?: boolean
+  /**
+   * Draw the chosen map on phones and tablets too. Off (the app's pages), those get the studio. The combo embed turns it
+   * on: every device sees the same map. Default false.
+   */
+  mapOnMobile?: boolean
+  /** Change maps under a veil (a blur that fades in and out). Off, the old map stays until the new one is in. Default true. */
+  mapVeil?: boolean
+  /**
+   * First person: a left click on the canvas plays the primary attack, a right click the secondary one (no context
+   * menu). Default true.
+   */
+  pointerAttacks?: boolean
 }
 
 /** How finely the viewer draws: for slower devices. */
