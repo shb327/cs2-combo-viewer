@@ -144,7 +144,8 @@ First person uses the mesh groups `firstperson_sleeves` (always) and `firstperso
 | `arms.json`, `arms_models.json` | yes / optional | `ArmsSkeleton` of the glove models (`{ [vmdl]: … }` for models with their own bone order) |
 | `idle_index.json` + `idle/*` | optional | keyed by pose file; `InspectClip` looped |
 | `inspect_index.json` + `inspect/*` | optional | `{ [item]: file }`; `InspectClip = { clip, duration, frames, viewmodel: { bones, parents, tracks: [translations, rotations][] }, weapon? }` (one value, or one per frame; `weapon` as `viewmodel` plus `skeleton`, the knife's track) |
-| `weapon_binds.json`, `weapon_skeletons.json`, `attack_index.json` | optional | `{ [item]: [t, q] }`: the model-space bind of the bone the knife hangs from (`weapon_offset`); `{ [glb path]: ArmsSkeleton }`: the knife model's skeleton, to pose it on its track; attack clips (not built yet: `{}`) |
+| `weapon_binds.json`, `weapon_skeletons.json` | optional | `{ [item]: [t, q] }`: the model-space bind of the bone the knife hangs from (`weapon_offset`); `{ [glb path]: ArmsSkeleton }`: the knife model's skeleton, to pose it on its track |
+| `attack_index.json` + `attack/<item>/<name>.json` | optional | `{ [item]: { name, file }[] }`: the knife's swings, `light_miss1`, `light_miss2` (the light swing, alternating) and `heavy_miss1` (the heavy one), each an `InspectClip` (below), fetched when first played |
 | `inspect/gloves_deploy.json`, `inspect/gloves_anim.json` | optional | the glove inspect, fetched only when `inspect_index.json` lists `gloves_deploy` and `gloves_anim` (not built yet) |
 
 `ArmsSkeleton = { bones, parents /* -1 root, parents first */, pos: number[3][], rot: number[4][] /* parent space, Source inches */, twists? }`.
