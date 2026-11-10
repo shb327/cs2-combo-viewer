@@ -7,7 +7,9 @@ iframe, and is driven by its URL and by `postMessage`.
 - Address: **`https://view.combo.skin/combo?…`** (locally `http://127.0.0.1:5321/combo?…`, the production build on
   `vite preview`).
 - Items by the game's indexes, as Combo Skin's catalog has them. The embed draws exactly the float and seed it is given.
-- Protocol version 1 (`cs3d:ready` says which).
+- Protocol version 2 (`cs3d:ready` says which, and which features beyond version 1 work: see "Version 2"). A page
+  that uses none of version 2's parameters and commands gets exactly version 1's behaviour; version 2 only adds fields
+  to events.
 
 ## Parameters
 
@@ -23,6 +25,8 @@ iframe, and is driven by its URL and by `postMessage`.
 | `gloves_seed` | The pattern seed, 0 to 1000; left out: the default seed, `0` | no |
 | `agent` | The agent's item definition index (Bloody Darryl The Strapped `4613`); empty or left out: Lt. Commander Ricksaw \| NSWC SEAL (`5404`) | no |
 | `view` | `fp` (first person, the default) or `orbit` (the knife alone, turned with the mouse) | no |
+| `map` | Version 2: one of `cs3d:ready`'s `maps` (`de_vertigo`); left out: the default map (`defaultMap`, Vertigo). Anything else is `unknown-map` | no |
+| `input` | Version 2: `game`: the game's mouse buttons and keys in first person, and the mouse never moves the view (see "Input mode"). Left out: input as in version 1 | no |
 | `ui` | `1` (default): a loading pill and error messages over the view; `0`: only the view and the thin progress bar | no |
 | `capture` | `1`: the screenshot mode (below, "Capturing"): a fixed 1920×1080 frame, `ui=0`, the pose held still, `cs3d:captureReady` and `cs3d:capture` | no |
 | `debug` | `1`: accepts `cs3d:loseContext` (testing) | no |
@@ -43,6 +47,9 @@ https://view.combo.skin/combo?knife=507&knife_paint=415&knife_float=0.01&knife_s
 
 Without a combo in the URL the embed shows the background and waits for `cs3d:load`.
 
+**Unknown parameters are ignored**, in every version: a page may send `input=game` or `map=…` to an older embed, which
+draws the combo as before.
+
 ## Messages
 
 Every message is an object with a `type` starting `cs3d:`. A command may carry an `id` (a string); every event it
@@ -53,12 +60,13 @@ by the URL have `id: null`.
 
 | Event | Fields | When |
 | --- | --- | --- |
-| `cs3d:ready` | `version` (1), `release` (the asset release, or null), `webgl2` (boolean) | Once, first, as soon as the embed knows the parent's origin (below) |
+| `cs3d:ready` | `version` (2), `release` (the asset release, or null), `webgl2` (boolean); version 2: `features`, `maps`, `defaultMap`, `agents`, `defaultAgent` (see "Version 2") | Once, first, as soon as the embed knows the parent's origin (below) and has its lists of maps and agents |
 | `cs3d:progress` | `id`, `loaded`, `total` (files finished and started so far) | While loading, at most 10 a second; `total` grows as files are found |
-| `cs3d:loaded` | `id`, `combo` (the combo drawn: every field as a number, the default agent's index filled in), `view`, `release`, `ms` (from the request, or from the page's start for the URL's combo) | The combo is drawn |
-| `cs3d:error` | `id`, `code`, `message` (a sentence to show), `retryable` | The combo can't be drawn (codes below) |
+| `cs3d:loaded` | `id`, `combo` (the combo drawn: every field as a number, the default agent's index filled in), `view`, `map` (version 2), `release`, `ms` (from the request, or from the page's start for the URL's combo) | The combo is drawn, and a frame showing it has been presented (version 2, `first-frame`) |
+| `cs3d:error` | `id`, `code`, `message` (a sentence to show), `retryable`, `kept` (version 2: the last drawn combo is still on screen) | The combo can't be drawn, or a command was refused (codes below) |
 | `cs3d:recovering` | `id`, `reason` (`context-lost`), `attempt` (1) | The GPU dropped the view; the embed rebuilds it and loads the combo again (`progress`, then `loaded` follow) |
-| `cs3d:state` | `id`, `status` (`loading`, `loaded`, `error`), `combo`, `view`, `release`, `loadId` (the `id` of the request shown) | Reply to `cs3d:getState` |
+| `cs3d:state` | `id`, `status` (`loading`, `loaded`, `error`), `combo`, `view`, `map` (version 2), `release`, `loadId` (the `id` of the request shown) | Reply to `cs3d:getState` |
+| `cs3d:key` | `id` (null), `key` (`Escape`) | Version 2, with `input=game`: Escape was pressed in the embed (see "Input mode") |
 | `cs3d:captureReady` | `id`, `combo`, `release` | With `capture=1`: after `cs3d:loaded`, once the frame is final (see "Capturing") |
 | `cs3d:captured` | `id`, `png` (a `Blob`, `image/png`), `width`, `height` (1920, 1080), `coverage` (0 to 1: the share of the frame the 3D view drew), `combo`, `release` | Reply to `cs3d:capture` |
 
@@ -69,7 +77,7 @@ between after a lost GPU context. A newer request supersedes an older one: the o
 
 | Command | Fields | Does |
 | --- | --- | --- |
-| `cs3d:load` | `id`, `combo` (the parameters above as an object, numbers or strings), `view` (optional) | Shows another combo in the same iframe, without a reload. While it loads, the last frame stays on screen |
+| `cs3d:load` | `id`, `combo` (the parameters above as an object, numbers or strings), `view` (optional), `map` (version 2, optional: left out, the default map) | Shows another combo in the same iframe, without a reload. While it loads, the last frame stays on screen |
 | `cs3d:inspect` | `id` | Plays the knife's inspect from the start (first person) |
 | `cs3d:setView` | `id`, `view` (`fp` or `orbit`) | Changes the view, reloading the combo in it |
 | `cs3d:getState` | `id` | Asks for `cs3d:state` |
@@ -87,11 +95,101 @@ Commands sent before `cs3d:ready` aren't lost: the embed keeps them from its fir
 | `unknown-knife` / `unknown-gloves` | No such knife or gloves (or the index is another kind of item) | no | Show the screenshot |
 | `unknown-knife-finish` / `unknown-gloves-finish` | The item has no finish with that paint index | no | Show the screenshot |
 | `unknown-agent` | No built agent with that index | no | Retry without `agent` (Ricksaw), or show the screenshot |
+| `unknown-map` | Version 2: a `map` that isn't in `cs3d:ready`'s `maps` (the studio never is) | no | Retry without `map` (the default) |
 | `assets-unavailable` | The catalog or a file couldn't be loaded (network, host) | yes | Offer "Try again" (send `cs3d:load` again), else the screenshot |
 | `context-lost` | The GPU dropped the view twice in a row while loading (a reset, often during a long first shader compile on a weak GPU) | yes | Show the screenshot; "Try again" may work once the GPU has settled |
 
+`assets-unavailable` also covers a map whose files couldn't be loaded: the embed never falls back to another map or
+the studio.
+
+**`kept`** (version 2): `true` when the last drawn combo is still on screen after the error, so the page can leave
+the view up and just say what failed: a `cs3d:load` with the same knife and gloves (same finishes, floats and seeds)
+and the same view whose agent or map was refused or failed to load; a refused `cs3d:capture`. `false` otherwise: the
+view is cleared (as in version 1) or there was nothing on screen.
+
 The `message` is plain English for people, e.g. "Unknown knife (item 9999)." or "knife_float 0.5 is outside Karambit |
 Doppler (Ruby)'s range (0 to 0.08).". With `ui=1` the embed shows it too.
+
+## Version 2
+
+`cs3d:ready` says what the embed can do:
+
+```js
+{ type: 'cs3d:ready', version: 2, release: '3de0d6e58111', webgl2: true,
+  features: ['map', 'agents', 'input', 'keys', 'first-frame'],
+  maps: [{ id: 'de_vertigo', name: 'Vertigo' }], defaultMap: 'de_vertigo',
+  agents: [4613, 4619, /* … */ 5404 /* … */], defaultAgent: 5404 }
+```
+
+- **`features`**: each is listed only once it works. `map`: the `map` parameter and field. `agents`: the `agents`
+  list (and changing the agent of the combo shown, below). `input`: `input=game`. `keys`: `cs3d:key`.
+  `first-frame`: `cs3d:loaded` comes after a frame of the combo is on screen.
+- **`maps`**: the maps a visitor may choose, in the order to show, each `{ id, name }`: the id is `[a-z0-9_]`, at most
+  32 characters; the name plain English, at most 40. Never the studio. `defaultMap` is one of them (Vertigo).
+- **`agents`**: the item definition indexes of every built agent (63 as of release `3de0d6e58111`); `defaultAgent`
+  is Ricksaw's, `5404`. The site has the agents' names in its own catalog.
+- If the lists can't be loaded, `cs3d:ready` comes with empty `maps` and `agents`, and the load's `cs3d:error`
+  (`assets-unavailable`) follows.
+
+### Map and agent
+
+The map is chosen like the view: `map` in the URL or in `cs3d:load`. Left out, the default is drawn (a `cs3d:load`
+without `map` goes back to Vertigo; it doesn't keep the map before). `cs3d:loaded` and `cs3d:state` say which map is
+drawn. Every device draws the chosen map, phones included (in version 1 phones got the studio).
+
+A `cs3d:load` with the **same combo and another agent or map** changes only the arms or the scene: the last frame
+(the map's background included) stays on screen until the new one is drawn, then `cs3d:loaded`. If it fails, the
+last drawn scene stays and the error says `kept: true`:
+
+```js
+send({ type: 'cs3d:load', id: 'a2', combo: { ...combo, agent: 4613 } })  // → progress…, loaded { combo: { agent: 4613, … }, map: 'de_vertigo' }
+send({ type: 'cs3d:load', id: 'm1', combo, map: 'de_dust2' })             // not built: → error { code: 'unknown-map', kept: true }
+send({ type: 'cs3d:load', id: 'a3', combo: { ...combo, agent: 4619 } })  // its files fail: → error { code: 'assets-unavailable', kept: true, retryable: true }
+```
+
+### Input mode
+
+With `input=game` in the URL, in first person:
+
+- A **left click** on the view plays the light swing, a **right click** the heavy swing (no context menu), **F** the
+  inspect, each from its start, cutting what plays. A swing the knife has no animation for does nothing. Holding F
+  doesn't repeat it.
+- Only the mouse: **touch and pen do nothing**.
+- The mouse never turns or zooms the view (in the orbit view either), and the pointer is never locked.
+- A click gives the embed's document the keyboard's focus, so F works after it.
+- **Escape** isn't acted on in the embed: it posts `cs3d:key { id: null, key: 'Escape' }` to the parent (to its
+  origin only, as every event), so the page can close its window. No other key is forwarded.
+
+Without `input`, input is as in version 1: clicks and keys do nothing, and the orbit view turns with the mouse.
+
+### First frame
+
+`cs3d:loaded` is posted only once a frame showing the combo has been presented: two drawn frames after the combo is
+in place, in every mode (`capture=1` too, where `cs3d:captureReady` still follows). A page that swaps its screenshot
+for the iframe on `cs3d:loaded` never shows an empty view. While the iframe is off screen it doesn't draw, so
+`cs3d:loaded` waits until it is shown.
+
+### Example: a window with the game's actions
+
+```js
+const VIEWER = 'https://view.combo.skin'
+let ready = null
+const frame = document.createElement('iframe')
+frame.src = `${VIEWER}/combo?${new URLSearchParams({ ...combo, input: 'game', ui: '0' })}`
+window.addEventListener('message', (e) => {
+  if (e.origin !== VIEWER || e.source !== frame.contentWindow) return
+  const m = e.data
+  if (m.type === 'cs3d:ready') ready = m                        // m.version >= 2: offer m.maps and m.agents
+  if (m.type === 'cs3d:loaded') hideScreenshot()                 // a frame of the combo is on screen
+  if (m.type === 'cs3d:key' && m.key === 'Escape') closeWindow()
+  if (m.type === 'cs3d:error' && !m.kept) showScreenshot(m.message)
+})
+const choose = (map, agent) =>
+  frame.contentWindow.postMessage({ type: 'cs3d:load', id: crypto.randomUUID(), combo: { ...combo, agent }, map }, VIEWER)
+```
+
+Check `ready.version >= 2` and `ready.features` before offering a choice: an older embed ignores `map`, `input` and
+the commands it doesn't know.
 
 ## Capturing
 
@@ -176,6 +274,10 @@ The assets themselves come from `https://assets.combo.skin`, whose CORS rules al
   each combo's GPU memory is freed when the next is drawn. Files shared between combos (the weapon grunge and wear, a
   glove model's textiles, an agent's arms) come from the browser's cache.
 - **Offscreen**: the embed stops drawing while the iframe is scrolled out of view.
+- **Narrow views**: in first person the camera keeps 16:9's horizontal angle on views narrower than 16:9 (a phone held
+  upright): the hands and knife keep their size across the view's width and more shows above and below them. Wider
+  views keep the vertical angle. The map's background covers the view (`object-fit: cover`), so on a tall view it is
+  cropped at the sides.
 
 ## Example
 
@@ -243,6 +345,12 @@ seconds more, for its shader compile. Show progress from `cs3d:progress`, and ke
 (`?viewer=<origin>`, default `http://127.0.0.1:5321`), switches between four combos (the reference, Big Swell, a vanilla
 Butterfly Knife, Bloody Darryl The Strapped), sends every command and logs every message (`window.hostLog`).
 `?noref=1` sends `Referrer-Policy: no-referrer`; `?start=message` sends the combo by message instead of the URL.
+
+Version 2 in the test host: the protocol version and features from `cs3d:ready`; a map and an agent list filled from
+it (a choice loads the combo again by message with it); an unknown map and an unknown agent (both `kept`); the swings
+(`cs3d:attack`); `input=game` (`?input=game` or a checkbox, which reloads the iframe; Escape in the view shows a line
+when `cs3d:key` arrives); and a placeholder over the view from each load until `cs3d:loaded`, as a page that swaps its
+screenshot would.
 
 ```powershell
 cd viewer

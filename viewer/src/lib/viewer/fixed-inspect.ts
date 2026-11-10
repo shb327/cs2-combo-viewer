@@ -168,9 +168,12 @@ export class FixedInspect {
   /** The item's turn (degrees) so its front (+Z) faces the camera: for items framed by size; 0 for weapons. */
   private faceYaw = 0
 
+  /** Dragging turns the item and the wheel zooms (off: the game's view stays as framed). */
+  inputEnabled = true
+
   constructor(private readonly camera: THREE.PerspectiveCamera, private readonly holder: THREE.Object3D, canvas: HTMLCanvasElement) {
     canvas.addEventListener('pointerdown', (e) => {
-      if (!this.drag) return
+      if (!this.drag || !this.inputEnabled) return
       this.drag.dragging = true
       this.drag.last = [e.clientX, e.clientY]
       canvas.setPointerCapture(e.pointerId)
@@ -187,7 +190,7 @@ export class FixedInspect {
     canvas.addEventListener('pointercancel', release)
     // Scroll zooms: the camera moves along its line to the item (the background stays as the game framed it).
     canvas.addEventListener('wheel', (e) => {
-      if (!this.drag) return
+      if (!this.drag || !this.inputEnabled) return
       e.preventDefault()
       this.dolly = THREE.MathUtils.clamp(this.dolly * Math.exp(e.deltaY * 0.001), MIN_DOLLY, MAX_DOLLY)
       this.placeCamera()

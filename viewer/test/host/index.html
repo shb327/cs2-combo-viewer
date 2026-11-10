@@ -14,18 +14,37 @@
     button { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid #ffffff26; background: #161816; color: inherit; cursor: pointer; text-align: left; }
     h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8a8f8a; margin: 8px 0 0; }
     #origin { font-size: 12px; color: #8a8f8a; }
+    select { font: inherit; padding: 6px; border-radius: 6px; border: 1px solid #ffffff26; background: #161816; color: inherit; }
+    label { display: flex; gap: 8px; align-items: center; }
+    #flash, #version { font-size: 12px; color: #8a8f8a; }
+    #placeholder { position: absolute; inset: 0; display: grid; place-items: center; background: #1d201d; color: #8a8f8a; pointer-events: none; }
+    #placeholder[hidden] { display: none; }
     #log { white-space: pre-wrap; font: 11px ui-monospace, monospace; background: #161816; padding: 8px; border-radius: 6px; flex: 1; min-height: 200px; overflow: auto; margin: 0; }
   </style>
 </head>
 <body>
   <!-- A stand-in for a combo page on combo.skin: it frames the viewer from another origin and drives it by postMessage. -->
-  <div id="frame"><iframe id="viewer" title="Combo in 3D" allow="fullscreen"></iframe></div>
+  <div id="frame"><iframe id="viewer" title="Combo in 3D" allow="fullscreen"></iframe><div id="placeholder" hidden>The screenshot (until cs3d:loaded)</div></div>
   <aside>
     <div id="origin"></div>
+    <div id="version">Protocol: waiting for cs3d:ready</div>
     <h2>Combos</h2>
     <div id="combos" style="display: contents"></div>
     <h2>Commands</h2>
     <button data-cmd="inspect">Inspect</button>
+    <button data-cmd="light">Attack: light swing</button>
+    <button data-cmd="heavy">Attack: heavy swing</button>
+    <button data-cmd="badAttack">Attack: an unknown kind (bad-params, combo kept)</button>
+    <h2>Map and agent (version 2)</h2>
+    <label>Map <select id="map"></select></label>
+    <label>Agent <select id="agent"></select></label>
+    <button data-cmd="badMap">Load an unknown map (unknown-map, combo kept)</button>
+    <button data-cmd="badAgent">Load an unknown agent (unknown-agent, combo kept)</button>
+    <h2>Input and first frame (version 2)</h2>
+    <label><input type="checkbox" id="input-game"> input=game (reloads the iframe): click = light, right click = heavy, F = inspect, Escape is forwarded</label>
+    <div id="flash"></div>
+    <label><input type="checkbox" id="cover"> Cover the view with a placeholder from each load until cs3d:loaded</label>
+    <h2>Other</h2>
     <button data-cmd="fp">View: first person</button>
     <button data-cmd="orbit">View: orbit</button>
     <button data-cmd="state">Get state</button>

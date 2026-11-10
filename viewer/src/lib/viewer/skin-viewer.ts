@@ -190,6 +190,7 @@ export class SkinViewer {
       lightYaw: () => this.lighting.angle + this.lightSpin,
       onChange: () => this.updateFixedInspect(),
       readableBackground: opts.readableBackground,
+      veil: opts.mapVeil,
     }, opts.background === undefined ? 0x0b0b12 : opts.background)
     this.fixed = new FixedInspect(this.camera, this.holder, this.renderer.domElement)
     this.scene.environmentIntensity = STUDIO_ENVIRONMENT.reflections
@@ -215,8 +216,9 @@ export class SkinViewer {
     })
     canvas.addEventListener('pointerleave', () => this.pointer.set(0, 0))
     /** First person: left click fires (a gun's shot, a knife's slash), right click is the secondary attack (a stab, the revolver's alt fire). */
+    const pointerAttacks = opts.pointerAttacks !== false
     canvas.addEventListener('pointerdown', (e) => {
-      if (!this.firstPerson || !this.fpRig?.attacks.length) return
+      if (!pointerAttacks || !this.firstPerson || !this.fpRig?.attacks.length) return
       if (e.button === 0) this.startFire()
       else if (e.button === 2) void this.attack(secondaryAttack(this.fpRig.attacks)?.name)
     })
@@ -224,7 +226,7 @@ export class SkinViewer {
     window.addEventListener('pointercancel', () => this.stopFire())
     window.addEventListener('blur', () => this.stopFire())
     canvas.addEventListener('contextmenu', (e) => {
-      if (this.firstPerson && this.fpRig?.attacks.length) e.preventDefault()
+      if (pointerAttacks && this.firstPerson && this.fpRig?.attacks.length) e.preventDefault()
     })
   }
 
@@ -244,6 +246,34 @@ export class SkinViewer {
     for (const finish of this.loaded.finishes) if (isGlove(finish)) finish.update(this.renderer)
     if (!this.firstPerson && !this.fixed.active) this.controls.update()
     this.map.render()
+    this.framesDrawn++
+    for (const w of this.drawWaiters.splice(0)) {
+      if (this.framesDrawn >= w.frame) w.resolve()
+      else this.drawWaiters.push(w)
+    }
+  }
+
+  /** Frames drawn so far (by the animation loop). */
+  private framesDrawn = 0
+  private readonly drawWaiters: { frame: number; resolve: () => void }[] = []
+
+  /**
+   * Resolves once `frames` more frames have been drawn: the scene as it is now has then been presented on screen (the
+   * browser shows a frame after the task that drew it). While paused (offscreen) it waits.
+   */
+  whenDrawn(frames = 2): Promise<void> {
+    return new Promise((resolve) => this.drawWaiters.push({ frame: this.framesDrawn + frames, resolve }))
+  }
+
+  /**
+   * Whether the mouse may move the view: the orbit's turn, zoom and pan, and the fixed inspect's drag and wheel.
+   * First person never moves with the mouse.
+   */
+  setCameraInput(on: boolean): void {
+    this.controls.enableRotate = on
+    this.controls.enableZoom = on
+    this.controls.enablePan = on
+    this.fixed.inputEnabled = on
   }
 
   /**
@@ -405,6 +435,29 @@ export class SkinViewer {
     this.inspectStart = performance.now()
   }
 
+  /** Which of a knife's swings the first-person weapon has: `light` (primary attack) and `heavy` (secondary). */
+  get swings(): ('light' | 'heavy')[] {
+    const list = this.fpRig?.attacks ?? []
+    const out: ('light' | 'heavy')[] = []
+    if (list.length && primaryAttacks(list).length) out.push('light')
+    if (secondaryAttack(list)) out.push('heavy')
+    return out
+  }
+
+  /**
+   * Plays a swing from its start, cutting whatever plays: `light` the primary attack (alternating as the game does),
+   * `heavy` the secondary. Nothing when the weapon has none.
+   */
+  swing(kind: 'light' | 'heavy'): void {
+    const list = this.fpRig?.attacks ?? []
+    if (!list.length) return
+    if (kind === 'light') void this.attack()
+    else {
+      const heavy = secondaryAttack(list)
+      if (heavy) void this.attack(heavy.name)
+    }
+  }
+
   private firing = false
   private fireTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -495,13 +548,47 @@ export class SkinViewer {
     this.keyLight.color.set(l.keyColor)
     this.rimLight.intensity = l.rim
     this.rimLight.color.set(l.rimColor)
-    const map = IS_MOBILE_DEVICE ? null : l.map ?? null
+    const map = IS_MOBILE_DEVICE && !this.opts.mapOnMobile ? null : l.map ?? null
     const ambient = l.ambient / DEFAULT_LIGHTING.ambient
     this.scene.environmentIntensity = ambient * (map ? this.mapLighting.reflections : STUDIO_ENVIRONMENT.reflections)
     this.fixed.setOpenEnvDiffuse(map ? 1 : STUDIO_ENVIRONMENT.fill / STUDIO_ENVIRONMENT.reflections)
     if (!l.orbit) this.lightSpin = 0
     this.placeLights()
-    if (map !== this.map.id) void this.map.load(map)
+    void this.showMap(map)
+  }
+
+  /** The map last asked for (undefined: none yet) and its load. */
+  private mapWanted: string | null | undefined = undefined
+  private mapDone: Promise<boolean> = Promise.resolve(true)
+
+  private showMap(map: string | null): Promise<boolean> {
+    if (map === this.mapWanted) return this.mapDone
+    this.mapWanted = map
+    const done = this.map.load(map).then((ok) => {
+      /** Failed: the old map stays, and is the one asked for again. */
+      if (!ok && this.mapDone === done) {
+        this.mapWanted = this.map.id
+        this.lighting = { ...this.lighting, map: this.map.id }
+      }
+      return ok
+    })
+    this.mapDone = done
+    return done
+  }
+
+  /**
+   * Puts the model on an inspect map (null: the studio) and waits for it.
+   * @returns true once the map is in place (or already was); false when it couldn't be loaded (the old one stays) or
+   *   another map was asked for meanwhile
+   */
+  setMap(map: string | null): Promise<boolean> {
+    this.setLighting({ map })
+    return this.mapDone
+  }
+
+  /** The map shown (null: the studio, or none yet). */
+  get mapId(): string | null {
+    return this.map.id
   }
 
   /**
@@ -864,14 +951,33 @@ export class SkinViewer {
   }
 
   /** A copy of the frame on screen: held over the view while the next model loads, so nothing blinks. */
-  snapshotCanvas(): HTMLCanvasElement {
+  /**
+   * A copy of the frame, to show while the next one loads.
+   * @param withBackground with the map's background under it (to hide a change of map too; for display only: a
+   *   background fetched without CORS makes the copy unreadable)
+   */
+  snapshotCanvas(withBackground = false): HTMLCanvasElement {
     this.map.render()
     const source = this.renderer.domElement
     const copy = document.createElement('canvas')
     copy.width = source.width
     copy.height = source.height
-    copy.getContext('2d')?.drawImage(source, 0, 0)
+    const ctx = copy.getContext('2d')
+    if (ctx && withBackground) this.drawBackground(ctx, copy)
+    ctx?.drawImage(source, 0, 0)
     return copy
+  }
+
+  /** The map's background drawn over a whole canvas as CSS draws it (`object-fit: cover`). */
+  private drawBackground(ctx: CanvasRenderingContext2D, out: HTMLCanvasElement): void {
+    const bg = this.map.video
+    const bw = bg instanceof HTMLImageElement ? bg.naturalWidth : bg?.videoWidth ?? 0
+    const bh = bg instanceof HTMLImageElement ? bg.naturalHeight : bg?.videoHeight ?? 0
+    if (bg && bw && bh) {
+      const scale = Math.max(out.width / bw, out.height / bh)
+      const w = bw * scale, h = bh * scale
+      ctx.drawImage(bg, (out.width - w) / 2, (out.height - h) / 2, w, h)
+    }
   }
 
   /**
@@ -886,14 +992,7 @@ export class SkinViewer {
     out.height = source.height
     const ctx = out.getContext('2d')
     if (!ctx) throw new Error('No 2D canvas for the capture.')
-    const bg = this.map.video
-    const bw = bg instanceof HTMLImageElement ? bg.naturalWidth : bg?.videoWidth ?? 0
-    const bh = bg instanceof HTMLImageElement ? bg.naturalHeight : bg?.videoHeight ?? 0
-    if (bg && bw && bh) {
-      const scale = Math.max(out.width / bw, out.height / bh)
-      const w = bw * scale, h = bh * scale
-      ctx.drawImage(bg, (out.width - w) / 2, (out.height - h) / 2, w, h)
-    }
+    this.drawBackground(ctx, out)
     this.map.render()
     ctx.drawImage(source, 0, 0)
     return { canvas: out, coverage: coverage(source) }

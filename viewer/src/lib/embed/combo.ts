@@ -5,7 +5,22 @@ import { VANILLA, type CatalogIndex, type CatalogSkin } from '@/lib/data/catalog
  * The combo embed's contract (docs/embed.md): a knife and gloves by the game's item definition and paint indexes,
  * each with an exact float and pattern seed, on an agent's arms (by its item definition index).
  */
-export const COMBO_VERSION = 1
+export const COMBO_VERSION = 2
+
+/**
+ * What this embed can do beyond protocol version 1, listed in `cs3d:ready` (docs/embed.md, "Version 2"): a feature is
+ * listed only once it works.
+ */
+export const COMBO_FEATURES = ['map', 'agents', 'input', 'keys', 'first-frame'] as const
+
+/** The map drawn when the page names none (the viewer's DEFAULT_LIGHTING.map). */
+export const DEFAULT_MAP = 'de_vertigo'
+
+/** A map a visitor may choose (`cs3d:ready`'s `maps`): never the studio. */
+export interface ComboMap { id: string; name: string }
+
+/** The input mode (`input=game`): the game's mouse buttons and keys in first person. */
+export type ComboInputMode = 'game' | null
 
 export type ComboView = 'fp' | 'orbit'
 
@@ -25,7 +40,7 @@ export interface ComboInput {
 
 export type ComboErrorCode =
   | 'no-webgl2' | 'bad-params' | 'unknown-knife' | 'unknown-knife-finish' | 'unknown-gloves' | 'unknown-gloves-finish'
-  | 'unknown-agent' | 'assets-unavailable' | 'context-lost'
+  | 'unknown-agent' | 'unknown-map' | 'assets-unavailable' | 'context-lost'
 
 export interface ComboError { code: ComboErrorCode; message: string }
 
@@ -68,6 +83,27 @@ export function comboFromParams(params: URLSearchParams): ComboInput {
     if (v !== null) input[key] = v
   }
   return input
+}
+
+const MAP_ID = /^[a-z0-9_]{1,32}$/
+
+/** The maps on offer from `maps.json`, as `cs3d:ready` lists them: well-formed ids and names only, never the studio. */
+export function comboMaps(list: { id?: unknown; name?: unknown }[]): ComboMap[] {
+  return list
+    .filter((m): m is ComboMap => typeof m.id === 'string' && MAP_ID.test(m.id) && m.id !== 'studio'
+      && typeof m.name === 'string' && m.name.length > 0 && m.name.length <= 40)
+    .map(({ id, name }) => ({ id, name }))
+}
+
+/**
+ * A map from the URL or `cs3d:load`: left out (or empty), the default; else one of the maps on offer.
+ * @returns the map's id, or an `unknown-map` error
+ */
+export function parseMap(v: unknown, maps: readonly ComboMap[], fallback: string): string | ComboError {
+  if (v === undefined || v === null || v === '') return fallback
+  if (typeof v === 'string' && maps.some((m) => m.id === v)) return v
+  const shown = typeof v === 'string' ? v.slice(0, 40) : typeof v
+  return { code: 'unknown-map', message: `Unknown map "${shown}". Maps: ${maps.map((m) => m.id).join(', ') || 'none'}.` }
 }
 
 export function parseView(v: unknown): ComboView | null {
@@ -171,6 +207,10 @@ function inRange(skin: CatalogSkin, float: number, key: string, catalog: Catalog
   }
   return Math.min(skin.floatMax, Math.max(skin.floatMin, float))
 }
+
+/** The same knife and gloves, each with the same finish, float and seed (the agent aside). */
+export const sameItems = (a: ResolvedCombo, b: ResolvedCombo): boolean =>
+  comboKey({ ...a, agent: '' }) === comboKey({ ...b, agent: '' })
 
 /** A short key of what the viewer has to load (the same key: nothing to reload). */
 export const comboKey = (c: ResolvedCombo): string =>
