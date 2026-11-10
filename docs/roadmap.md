@@ -982,6 +982,18 @@ Status: **built and checked locally; the upload waits for approval.** `features`
   and heavy for all 20 knives and nothing in the orbit view; two light swings play different clips, the heavy a third
   (`SHEET-swings.png`); a swing cuts the inspect; `kick` and a missing value are `bad-params`, `kept`; right click
   plays the heavy; a touch plays nothing.
+- **The pipeline's full check** (`node pipeline\check.mjs --out p6-check`, local assets with the clips, then
+  `--shaders`): **all 753 pass** (576 knife finishes, 94 glove finishes, 20 knives in first person, 63 agents; average
+  warm loads 1.0 to 1.7 s) and all 1,158 compositing shaders compile and link. Sheets in
+  `C:\cs2-data\reference\compare\p6-check\`.
+
+#### Where it stopped
+
+Parts A (#13) and B (#14) are in review. Next: merge #13, then #14 (Pages deploys `main`), then the upload of
+`71979e622923` (`node pipeline\upload.mjs --dry-run`, then without it) once approved, and the site's window. Left for
+later: more maps (each needs its vanity VPK and an in-game screenshot, see the pipeline README), a real phone (iPhone)
+on Vertigo, a lighter mode for phones (half-size textures, a smaller EXR), how the game picks `attack_variation`
+(the embed alternates), and the map's background on tall views (cropped at the sides by `object-fit: cover`).
 
 #### The upload (not done: waiting for approval)
 
