@@ -1,9 +1,10 @@
-import type { ComboErrorCode, ComboInput, ComboView, NormalizedCombo } from './combo'
+import type { ComboErrorCode, ComboInput, ComboMap, ComboView, NormalizedCombo } from './combo'
 import { isAllowedOrigin, knownParentOrigin, learnParentOrigin, postToParent, whenParentOrigin } from './origins'
 
 /** The combo embed's messages (docs/embed.md). Every event that follows a command carries that command's `id`. */
 export type ComboCommand =
-  | { type: 'cs3d:load'; id?: string; combo: ComboInput; view?: ComboView }
+  /** `map`: one of `cs3d:ready`'s maps; left out, the default map. */
+  | { type: 'cs3d:load'; id?: string; combo: ComboInput; view?: ComboView; map?: string }
   | { type: 'cs3d:inspect'; id?: string }
   | { type: 'cs3d:setView'; id?: string; view: ComboView }
   | { type: 'cs3d:getState'; id?: string }
@@ -15,12 +16,19 @@ export type ComboCommand =
 export type ComboStatus = 'loading' | 'loaded' | 'error'
 
 export type ComboEvent =
-  | { type: 'cs3d:ready'; version: number; release: string | null; webgl2: boolean }
+  | {
+    type: 'cs3d:ready'; version: number; release: string | null; webgl2: boolean
+    /** Version 2: what works beyond version 1, the maps a visitor may choose, the built agents (item definition indexes). */
+    features: string[]; maps: ComboMap[]; defaultMap: string; agents: number[]; defaultAgent: number
+  }
   | { type: 'cs3d:progress'; id: string | null; loaded: number; total: number }
-  | { type: 'cs3d:loaded'; id: string | null; combo: NormalizedCombo; view: ComboView; release: string | null; ms: number }
-  | { type: 'cs3d:error'; id: string | null; code: ComboErrorCode; message: string; retryable: boolean }
+  | { type: 'cs3d:loaded'; id: string | null; combo: NormalizedCombo; view: ComboView; map: string; release: string | null; ms: number }
+  /** `kept`: the last drawn combo is still on screen (a refused command, or a failed change of agent or map). */
+  | { type: 'cs3d:error'; id: string | null; code: ComboErrorCode; message: string; retryable: boolean; kept: boolean }
   | { type: 'cs3d:recovering'; id: string | null; reason: 'context-lost'; attempt: number }
-  | { type: 'cs3d:state'; id: string | null; status: ComboStatus; combo: NormalizedCombo | null; view: ComboView; release: string | null; loadId: string | null }
+  | { type: 'cs3d:state'; id: string | null; status: ComboStatus; combo: NormalizedCombo | null; view: ComboView; map: string; release: string | null; loadId: string | null }
+  /** With `input=game`: a key the embed doesn't act on, for the page (only Escape). */
+  | { type: 'cs3d:key'; id: null; key: 'Escape' }
   /** With `capture=1`: the loaded combo's frame is final (everything loaded and drawn, the pose held). */
   | { type: 'cs3d:captureReady'; id: string | null; combo: NormalizedCombo; release: string | null }
   /** Reply to `cs3d:capture` (another name than the command's: a page that isn't framed gets its own events). */
@@ -46,9 +54,10 @@ export class ComboChannel {
   private queue: ComboEvent[] = []
   private open = false
 
-  constructor(ready: () => ComboEvent) {
-    void whenParentOrigin().then(() => {
-      postToParent(ready())
+  /** @param ready `cs3d:ready`, asked for once the parent's origin is known (it may wait for the lists it carries) */
+  constructor(ready: () => ComboEvent | Promise<ComboEvent>) {
+    void whenParentOrigin().then(ready).then((event) => {
+      postToParent(event)
       this.open = true
       for (const e of this.queue.splice(0)) postToParent(e)
     })
