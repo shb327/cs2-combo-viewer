@@ -62,7 +62,7 @@ by the URL have `id: null`.
 | --- | --- | --- |
 | `cs3d:ready` | `version` (2), `release` (the asset release, or null), `webgl2` (boolean); version 2: `features`, `maps`, `defaultMap`, `agents`, `defaultAgent` (see "Version 2") | Once, first, as soon as the embed knows the parent's origin (below) and has its lists of maps and agents |
 | `cs3d:progress` | `id`, `loaded`, `total` (files finished and started so far) | While loading, at most 10 a second; `total` grows as files are found |
-| `cs3d:loaded` | `id`, `combo` (the combo drawn: every field as a number, the default agent's index filled in), `view`, `map` (version 2), `release`, `ms` (from the request, or from the page's start for the URL's combo) | The combo is drawn, and a frame showing it has been presented (version 2, `first-frame`) |
+| `cs3d:loaded` | `id`, `combo` (the combo drawn: every field as a number, the default agent's index filled in), `view`, `map` (version 2), `actions` (version 2: which of `inspect`, `light`, `heavy` are built for the knife drawn; empty in the orbit view), `release`, `ms` (from the request, or from the page's start for the URL's combo) | The combo is drawn, and a frame showing it has been presented (version 2, `first-frame`) |
 | `cs3d:error` | `id`, `code`, `message` (a sentence to show), `retryable`, `kept` (version 2: the last drawn combo is still on screen) | The combo can't be drawn, or a command was refused (codes below) |
 | `cs3d:recovering` | `id`, `reason` (`context-lost`), `attempt` (1) | The GPU dropped the view; the embed rebuilds it and loads the combo again (`progress`, then `loaded` follow) |
 | `cs3d:state` | `id`, `status` (`loading`, `loaded`, `error`), `combo`, `view`, `map` (version 2), `release`, `loadId` (the `id` of the request shown) | Reply to `cs3d:getState` |
@@ -79,6 +79,7 @@ between after a lost GPU context. A newer request supersedes an older one: the o
 | --- | --- | --- |
 | `cs3d:load` | `id`, `combo` (the parameters above as an object, numbers or strings), `view` (optional), `map` (version 2, optional: left out, the default map) | Shows another combo in the same iframe, without a reload. While it loads, the last frame stays on screen |
 | `cs3d:inspect` | `id` | Plays the knife's inspect from the start (first person) |
+| `cs3d:attack` | `id`, `attack` (`light` or `heavy`) | Version 2: plays the knife's light swing (the game's primary attack) or heavy swing (secondary attack) from its start, in first person. An attack the knife has no animation for is ignored; any other value is `cs3d:error` `bad-params` with `kept: true` (the combo stays) |
 | `cs3d:setView` | `id`, `view` (`fp` or `orbit`) | Changes the view, reloading the combo in it |
 | `cs3d:getState` | `id` | Asks for `cs3d:state` |
 | `cs3d:capture` | `id` | With `capture=1` and a combo loaded: asks for `cs3d:captured`. Otherwise `cs3d:error` `bad-params` (the combo shown stays) |
@@ -116,12 +117,12 @@ Doppler (Ruby)'s range (0 to 0.08).". With `ui=1` the embed shows it too.
 
 ```js
 { type: 'cs3d:ready', version: 2, release: '3de0d6e58111', webgl2: true,
-  features: ['map', 'agents', 'input', 'keys', 'first-frame'],
+  features: ['attack', 'map', 'agents', 'input', 'keys', 'first-frame'],
   maps: [{ id: 'de_vertigo', name: 'Vertigo' }], defaultMap: 'de_vertigo',
   agents: [4613, 4619, /* … */ 5404 /* … */], defaultAgent: 5404 }
 ```
 
-- **`features`**: each is listed only once it works. `map`: the `map` parameter and field. `agents`: the `agents`
+- **`features`**: each is listed only once it works. `attack`: `cs3d:attack` and `actions` in `cs3d:loaded`. `map`: the `map` parameter and field. `agents`: the `agents`
   list (and changing the agent of the combo shown, below). `input`: `input=game`. `keys`: `cs3d:key`.
   `first-frame`: `cs3d:loaded` comes after a frame of the combo is on screen.
 - **`maps`**: the maps a visitor may choose, in the order to show, each `{ id, name }`: the id is `[a-z0-9_]`, at most
@@ -145,6 +146,26 @@ last drawn scene stays and the error says `kept: true`:
 send({ type: 'cs3d:load', id: 'a2', combo: { ...combo, agent: 4613 } })  // → progress…, loaded { combo: { agent: 4613, … }, map: 'de_vertigo' }
 send({ type: 'cs3d:load', id: 'm1', combo, map: 'de_dust2' })             // not built: → error { code: 'unknown-map', kept: true }
 send({ type: 'cs3d:load', id: 'a3', combo: { ...combo, agent: 4619 } })  // its files fail: → error { code: 'assets-unavailable', kept: true, retryable: true }
+```
+
+### Attacks
+
+`cs3d:attack { id, attack: 'light' | 'heavy' }` plays a swing in first person, from its start, as the game's primary
+(light) and secondary (heavy) attacks do. Any new action, the inspect included, cuts the one playing, as in the game.
+`cs3d:loaded`'s `actions` lists what is built for the knife drawn (every knife in the catalog has all three:
+`['inspect', 'light', 'heavy']`); a page offers only those. Nothing is posted back for a swing.
+
+- **Which animations**: the game's knife viewmodel graphs (`viewmodel_knife*.vnmgraph`) play `light_miss1` or
+  `light_miss2` for the light swing (chosen by an `attack_variation` that the game's code sets) and `heavy_miss1` for
+  the heavy one. The embed plays the misses (there is nothing to hit) and alternates the light swing: the first after
+  a knife is drawn is `light_miss1`, then `light_miss2`, and so on. The hit and backstab clips aren't used.
+- The clips (about 60 KB each) are fetched with `input=game` once the combo is drawn, otherwise at the first swing.
+
+```js
+send({ type: 'cs3d:attack', id: 's1', attack: 'light' })  // light_miss1
+send({ type: 'cs3d:attack', id: 's2', attack: 'light' })  // light_miss2
+send({ type: 'cs3d:attack', id: 's3', attack: 'heavy' })  // heavy_miss1
+send({ type: 'cs3d:attack', id: 's4', attack: 'kick' })   // → error { code: 'bad-params', kept: true }
 ```
 
 ### Input mode

@@ -113,6 +113,8 @@ export class ComboRunner {
         this.drawnScene = scene
         this.events.loaded()
         if (this.options.capture) this.watchStill(token, viewer)
+        // The game's input: the swings' clips now, so the first click plays at once.
+        if (this.options.gameInput) viewer.preloadSwings()
       })
       .catch((e: Error) => {
         // A load that failed because the context went is the loss handler's to deal with.
@@ -158,6 +160,12 @@ export class ComboRunner {
   }
 
   inspect(): void { this.viewer?.inspect() }
+
+  /** The knife's actions built for the combo drawn: its inspect and swings (none outside first person). */
+  get actions(): ('inspect' | 'light' | 'heavy')[] {
+    const v = this.viewer
+    return v ? [...(v.canInspect ? ['inspect' as const] : []), ...v.swings] : []
+  }
 
   /** The swings the first-person knife has (`light`, `heavy`). */
   get swings(): ('light' | 'heavy')[] {

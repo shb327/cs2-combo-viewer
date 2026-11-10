@@ -52,14 +52,20 @@ export function primaryAttacks(list: AttackEntry[]): AttackEntry[] {
   /** Dual Berettas: left, right, left… */
   const sides = ['shoot_left1', 'shoot_right1'].map((n) => list.find((a) => a.name === n)).filter((a): a is AttackEntry => !!a)
   if (sides.length === 2) return sides
+  /** A knife: its light swings, alternating (the misses, as the build gives them; the hits where only those exist). */
+  const misses = list.filter((a) => /^light_miss\d*$/.test(a.name))
+  if (misses.length) return misses
   const slashes = list.filter((a) => /^light_hit\d*$/.test(a.name))
   return slashes.length ? slashes : list.slice(0, 1)
 }
 
-/** The secondary attack (right click): a gun's alternate fire, else a knife's stab, else the plain fire. */
+/** The secondary attack (right click): a gun's alternate fire, else a knife's heavy swing (its miss, else its hit). */
 export function secondaryAttack(list: AttackEntry[]): AttackEntry | undefined {
-  return list.find((a) => /^shoot_alt/.test(a.name)) ?? list.find((a) => /^heavy_hit/.test(a.name))
+  return list.find((a) => /^shoot_alt/.test(a.name)) ?? list.find((a) => /^heavy_miss/.test(a.name)) ?? list.find((a) => /^heavy_hit/.test(a.name))
 }
+
+/** Whether a knife has a light swing of its own (not the fallback to its first clip). */
+export const hasLightSwing = (list: AttackEntry[]): boolean => list.some((a) => /^light_(miss|hit)\d*$/.test(a.name))
 
 /**
  * The automatic weapons and their cycle time (seconds between shots): holding fire repeats the shot at this rate. CS2's own table is

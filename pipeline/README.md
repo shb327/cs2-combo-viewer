@@ -135,6 +135,6 @@ C:\cs2-data\extracted\
 
 ## Adding items
 
-New knives, gloves and agents come from the catalog: pin a newer commit in `items.json` (`catalog.commit`), then run `fetch-catalog.mjs` and the build. A knife's first-person clips are found from its model's folder (`idle1_<x>`, `lookat01_<x>`). Classic and newer (v2, `gloves/paints/volatile_02/`) glove paints are both built; the v2 ones also write `texture_average.json` (each of their textures' Reflectivity, which `shader-dump extract` reports per texture).
+New knives, gloves and agents come from the catalog: pin a newer commit in `items.json` (`catalog.commit`), then run `fetch-catalog.mjs` and the build. A knife's first-person clips are found from its model's folder (`idle1_<x>`, `lookat01_<x>`, and the swings `light_miss1_<x>`, `light_miss2_<x>`, `heavy_miss1_<x>`). Classic and newer (v2, `gloves/paints/volatile_02/`) glove paints are both built; the v2 ones also write `texture_average.json` (each of their textures' Reflectivity, which `shader-dump extract` reports per texture).
 
 A map needs its vanity VPK in the copies and a screenshot of the map taken in game with no hands, weapon or HUD, saved in `C:\cs2-data\reference`. In `items.json`: `"maps": { "<id>": { "name": "…", "background": "C:/cs2-data/reference/<file>.jpg", "viewYaw": -30 } }`. The screenshot's own direction isn't known, so `viewYaw` turns the eye from the direction the sun's light travels (degrees, left positive), which sets where the sun lights the hands from.

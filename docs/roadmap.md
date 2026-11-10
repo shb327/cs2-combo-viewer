@@ -10,7 +10,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | Done |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | Done |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent): the worker ([worker/](../worker/README.md)) | In review |
-| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices: protocol version 2 of the embed, in parts A (protocol) and B (attacks) | In progress |
+| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices: protocol version 2 of the embed, in parts A (protocol) and B (attacks) | In review; B's upload waits |
 
 ## Decisions
 
@@ -950,6 +950,64 @@ textures. Device mode measures layout, input and bytes, not a phone's GPU; a rea
 branch has no preview address: Pages builds `main` only). Lighter options, not done: a half-size texture set for
 phones (most of the bytes; needs new assets), a smaller EXR for phones (1.3 MB), the background capped at 1.5× on
 phones (about 170 KB).
+
+### B: attacks (branch `phase6-attacks`)
+
+Status: **built and checked locally; the upload waits for approval.** `features` gains `attack`.
+
+- [x] Where the game keeps them: each knife's folder `animation/anims/viewmodel/knife/<folder>/` has `light_hit1/2`,
+  `light_miss1/2`, `heavy_hit1`, `heavy_miss1`, `light_backstab`, `light_backstab2`, `heavy_backstab` (the Navaja has
+  no `heavy_hit1`; the Shadow Daggers also `light_miss3`–`5`, `heavy_miss2` and `all_*_anims`; the Falchion
+  `heavy_miss1_noflip`). The knife viewmodel graphs (`animation/graphs/viewmodel/viewmodel_knife.vnmgraph`, its
+  variations per knife, and the Butterfly's, Karambit's and Talon's own) list exactly `light_miss1`, `light_miss2`
+  and `heavy_miss1` among their misses: `LightMiss` is a parameterized selector over 1 and 2 on `attack_variation`,
+  `HeavyMiss` one clip. The extras above aren't used by any graph.
+- [x] Chosen: the misses, `light_miss1` / `light_miss2` alternating for the light swing (the first after a knife is
+  drawn is 1) and `heavy_miss1`. The game's code sets `attack_variation`; how (for example after a pause) isn't in the
+  files, so the viewer simply alternates. **Every one of the 20 knives has all three**; none lacks a clip.
+- [x] The build: `ATTACK_CLIPS` in `build.mjs`, `firstperson/attack/<item>/<name>.json` (the inspect's format, the
+  knife's own track included) and `attack_index.json`. 60 clips, 3.9 MB (about 60 KB each), fetched at the first
+  swing, or right after the combo is drawn with `input=game`.
+- [x] The embed: `cs3d:attack { id, attack }` (`light`, `heavy`; anything else `bad-params`, `kept`), `actions` in
+  `cs3d:loaded` (`inspect`, `light`, `heavy` as built; empty in the orbit view), the clicks of `input=game`. The
+  viewer's swings prefer the misses (`primaryAttacks`, `secondaryAttack` in `lib/data/attacks.ts`), which also
+  changes the app's own attack menu from hits to misses.
+- [ ] The upload (waits for approval, below).
+
+#### Checks (part B)
+
+- **Capture mode unchanged**: the four test combos through `/combo?capture=1` with part B's viewer (release
+  `3de0d6e58111`): byte-identical to before part A.
+- **Attacks** (`p6-check.mjs attack`, local assets, all pass): `features` has `attack`; `loaded` lists inspect, light
+  and heavy for all 20 knives and nothing in the orbit view; two light swings play different clips, the heavy a third
+  (`SHEET-swings.png`); a swing cuts the inspect; `kick` and a missing value are `bad-params`, `kept`; right click
+  plays the heavy; a touch plays nothing.
+- **The pipeline's full check** (`node pipeline\check.mjs --out p6-check`, local assets with the clips, then
+  `--shaders`): **all 753 pass** (576 knife finishes, 94 glove finishes, 20 knives in first person, 63 agents; average
+  warm loads 1.0 to 1.7 s) and all 1,158 compositing shaders compile and link. Sheets in
+  `C:\cs2-data\reference\compare\p6-check\`.
+
+#### Where it stopped
+
+Parts A (#13) and B (#14) are in review. Next: merge #13, then #14 (Pages deploys `main`), then the upload of
+`71979e622923` (`node pipeline\upload.mjs --dry-run`, then without it) once approved, and the site's window. Left for
+later: more maps (each needs its vanity VPK and an in-game screenshot, see the pipeline README), a real phone (iPhone)
+on Vertigo, a lighter mode for phones (half-size textures, a smaller EXR), how the game picks `attack_variation`
+(the embed alternates), and the map's background on tall views (cropped at the sides by `object-fit: cover`).
+
+#### The upload (not done: waiting for approval)
+
+`hosting.mjs` stages release **`71979e622923`**. Against what the bucket holds (the 2,402 objects of release
+`3de0d6e58111`): **1,507 new objects, 38.0 MB, all under `r/71979e622923/`** (viewer data 339 files 16.2 MB, of
+which the 60 attack clips 3.9 MB and the new `attack_index.json`; the shaders 1,160 files 19.7 MB and the maps 8 files
+2.1 MB, copied unchanged into the new release folder), **no new `g/` file**, and `release.json` replaced last. Nothing
+is deleted; the old release stays.
+
+**Order matters.** The live viewer follows `release.json`, and main's code (version 1) turns a click on `/combo`'s
+view into a swing as soon as the release has clips: today's site would start swinging on clicks. So upload only once
+parts A and B are merged and deployed (then the clips only play with `input=game` or `cs3d:attack`). Until the upload,
+part B's viewer lists `attack` but `actions` has no swings (the old release has no clips). The screenshot worker's
+build is pinned to its release and isn't affected either way.
 
 ## Phase 6 notes (from phase 5)
 

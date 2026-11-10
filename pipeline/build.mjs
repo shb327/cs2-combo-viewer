@@ -115,9 +115,16 @@ keepKits(knives, 'vcompmat', (kit) => { if (!kit.vanilla) kit.compmat = kitCompm
 keepKits(gloves, 'vcompmat', (kit) => { kit.compmat = kitCompmat(kit, 'gloves/paints/') })
 
 /**
+ * The attack clips a knife's swings play: the ones the game's knife viewmodel graphs use
+ * (animation/graphs/viewmodel/viewmodel_knife*.vnmgraph: every variation's LightMiss selector picks light_miss1 or
+ * light_miss2 by attack_variation, HeavyMiss plays heavy_miss1). The misses, since the viewer has nothing to hit.
+ */
+const ATTACK_CLIPS = ['light_miss1', 'light_miss2', 'heavy_miss1']
+
+/**
  * Each knife's first-person clips. Its viewmodel animations sit in a folder named as its model's
  * (weapons/models/knife/knife_m9/… → animation/anims/viewmodel/knife/knife_m9/): the first idle (idle1_<x>, else
- * idle_<x>) and the first inspect (lookat01_<x>).
+ * idle_<x>), the first inspect (lookat01_<x>) and the swings (ATTACK_CLIPS).
  */
 const firstPerson = {}
 for (const { def } of knives) {
@@ -128,10 +135,12 @@ for (const { def } of knives) {
   const idle = [`idle1_${suffix}`, `idle_${suffix}`].find(has)
   const inspect = [`lookat01_${suffix}`].find(has)
   if (!idle) { fail(def.name, null, 'clips', `no idle clip in ${dir}`); continue }
-  firstPerson[def.name] = { dir, idle, inspect }
+  const attacks = ATTACK_CLIPS.filter((a) => has(`${a}_${suffix}`)).map((name) => ({ name, clip: `${name}_${suffix}` }))
+  for (const a of ATTACK_CLIPS) if (!attacks.some((x) => x.name === a)) fail(def.name, null, 'clips', `no ${a} clip in ${dir}`)
+  firstPerson[def.name] = { dir, idle, inspect, attacks }
 }
 const clipPath = (item, clip) => `${firstPerson[item].dir}${clip}.vnmclip`
-const clips = Object.entries(firstPerson).flatMap(([item, c]) => [c.idle, c.inspect].filter(Boolean).map((x) => clipPath(item, x)))
+const clips = Object.entries(firstPerson).flatMap(([item, c]) => [c.idle, c.inspect, ...c.attacks.map((a) => a.clip)].filter(Boolean).map((x) => clipPath(item, x)))
 const kvFiles = new Map()
 /** Loads KV3 files; returns the ones that failed, with their errors. */
 const loadKv = (paths, round) => {
@@ -155,7 +164,13 @@ const models = [...new Set([...knives.map((k) => k.def.model_player), ...gloves.
   for (const [p, e] of r) if (e.error) bad.set(p, e.error)
   for (const [item, c] of Object.entries(firstPerson)) {
     const clip = [c.idle, c.inspect].filter(Boolean).map((x) => clipPath(item, x)).find((p) => bad.has(p))
-    if (clip) { fail(item, null, 'clips', `${clip}: ${bad.get(clip)}`); delete firstPerson[item] }
+    if (clip) { fail(item, null, 'clips', `${clip}: ${bad.get(clip)}`); delete firstPerson[item]; continue }
+    // A swing that can't be decoded is left out; the knife keeps the others.
+    c.attacks = c.attacks.filter((a) => {
+      const p = clipPath(item, a.clip)
+      if (bad.has(p)) fail(item, null, 'clips', `${p}: ${bad.get(p)}`)
+      return !bad.has(p)
+    })
   }
   const okModel = (name, m) => { if (!bad.has(m)) return true; fail(name, null, 'model', bad.get(m)); return false }
   knives = knives.filter((k) => okModel(k.def.name, k.def.model_player) && (firstPerson[k.def.name] || false))
@@ -567,7 +582,7 @@ for (const a of agents) {
 written.push(writeJson('agents.json', agentIndex))
 
 // First person: the knife's pose (its idle's first frame), its inspect, its own skeleton and bind, and the glove skeletons.
-const fp = { index: {}, inspect: {}, idle: {} }
+const fp = { index: {}, inspect: {}, idle: {}, attack: {} }
 const weaponSkeletons = {}, weaponBinds = {}
 for (const [item, c] of Object.entries(firstPerson)) {
   const def = itemDef(item)
@@ -606,6 +621,11 @@ for (const [item, c] of Object.entries(firstPerson)) {
     written.push(writeJson(`firstperson/inspect/${item}.json`, asClip(inspect, c.inspect)))
     fp.inspect[item] = `${item}.json`
   }
+  for (const a of c.attacks) {
+    const clip = readJson(workFile(clipPath(item, a.clip), '.json'))
+    written.push(writeJson(`firstperson/attack/${item}/${a.name}.json`, asClip(clip, a.clip)))
+  }
+  if (c.attacks.length) fp.attack[item] = c.attacks.map((a) => ({ name: a.name, file: `${item}/${a.name}.json` }))
 }
 written.push(writeJson('firstperson/index.json', fp.index))
 written.push(writeJson('firstperson/inspect_index.json', fp.inspect))
@@ -613,9 +633,10 @@ written.push(writeJson('firstperson/idle_index.json', fp.idle))
 written.push(writeJson('firstperson/weapon_skeletons.json', weaponSkeletons))
 written.push(writeJson('firstperson/weapon_binds.json', weaponBinds))
 written.push(writeJson('firstperson/arms_models.json', armsModels))
-// Attack clips and agent patch slots aren't built yet: empty indexes, so the viewer doesn't ask for files that aren't
-// there. The glove inspect clips are fetched only when inspect_index.json lists them (gloves_deploy, gloves_anim).
-written.push(writeJson('firstperson/attack_index.json', {}))
+// The swings: { [item]: { name, file }[] }, the files under firstperson/attack/. Agent patch slots aren't built: an
+// empty index, so the viewer doesn't ask for files that aren't there. The glove inspect clips are fetched only when
+// inspect_index.json lists them (gloves_deploy, gloves_anim).
+written.push(writeJson('firstperson/attack_index.json', fp.attack))
 written.push(writeJson('agent_patches.json', {}))
 const firstGlove = Object.values(armsModels)[0]
 if (firstGlove) written.push(writeJson('firstperson/arms.json', firstGlove))

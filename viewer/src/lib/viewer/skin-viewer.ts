@@ -10,7 +10,7 @@ import type { WeaponItem } from '@/lib/materials/weapon'
 import { loadAttachments } from '@/lib/data/attachments'
 import { GAME_ROOT, VIEWER_DATA } from '@/lib/data/catalog'
 import { PatchLayer, type AgentPatch } from '@/lib/viewer/agent-patches'
-import { attackLabel, AUTO_CYCLE, primaryAttacks, secondaryAttack, sortAttacks, type AttackEntry, type AttackInfo } from '@/lib/data/attacks'
+import { attackLabel, AUTO_CYCLE, hasLightSwing, primaryAttacks, secondaryAttack, sortAttacks, type AttackEntry, type AttackInfo } from '@/lib/data/attacks'
 import { loadPatches } from '@/lib/data/patches'
 import { defaultPetClip, loadPetClip, loadPets, petClips, type PetIndex, type PetModel } from '@/lib/data/pets'
 import { loadPins } from '@/lib/data/pins'
@@ -351,6 +351,8 @@ export class SkinViewer {
     weapon.matrixAutoUpdate = false
     rig.weapon = weapon
     this.fpRig = rig
+    /** A newly drawn knife's light swings start from the first. */
+    this.attackNext = 0
     poseRig(rig.parts, handIK(pose), rig.weapon, rig.bind)
     this.weaponRoot = weapon
     this.fpGlove = glove
@@ -439,7 +441,7 @@ export class SkinViewer {
   get swings(): ('light' | 'heavy')[] {
     const list = this.fpRig?.attacks ?? []
     const out: ('light' | 'heavy')[] = []
-    if (list.length && primaryAttacks(list).length) out.push('light')
+    if (hasLightSwing(list)) out.push('light')
     if (secondaryAttack(list)) out.push('heavy')
     return out
   }
@@ -451,10 +453,22 @@ export class SkinViewer {
   swing(kind: 'light' | 'heavy'): void {
     const list = this.fpRig?.attacks ?? []
     if (!list.length) return
-    if (kind === 'light') void this.attack()
+    if (kind === 'light') { if (hasLightSwing(list)) void this.attack() }
     else {
       const heavy = secondaryAttack(list)
       if (heavy) void this.attack(heavy.name)
+    }
+  }
+
+  /** Fetches the swings' clips ahead of the first click (otherwise they are fetched when first played). */
+  preloadSwings(): void {
+    const list = this.fpRig?.attacks ?? []
+    const wanted = [...(hasLightSwing(list) ? primaryAttacks(list) : []), secondaryAttack(list)]
+    for (const entry of wanted) {
+      if (!entry || this.attackClips.has(entry.file)) continue
+      const clip = json<InspectClip>(this.loader.firstPersonBase + 'attack/' + entry.file)
+      clip.catch(() => this.attackClips.delete(entry.file))
+      this.attackClips.set(entry.file, clip)
     }
   }
 

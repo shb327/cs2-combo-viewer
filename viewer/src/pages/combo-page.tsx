@@ -139,7 +139,7 @@ export function ComboPage() {
           drawn.current = done
           setShown(done)
           thaw()
-          if (req && now.combo) post({ type: 'cs3d:loaded', id: req.id, combo: now.combo, view: now.view, map: now.map, release: ASSET_LAYOUT.release, ms: Math.round(performance.now() - req.started) })
+          if (req && now.combo) post({ type: 'cs3d:loaded', id: req.id, combo: now.combo, view: now.view, map: now.map, actions: runner.current?.actions ?? [], release: ASSET_LAYOUT.release, ms: Math.round(performance.now() - req.started) })
         },
         error: (code, message, retryable, kept) => (kept ? failKept(id(), code, message, retryable) : fail(id(), code, message, retryable)),
         restored: thaw,
@@ -226,6 +226,16 @@ export function ComboPage() {
         case 'cs3d:inspect':
           runner.current?.inspect()
           break
+        case 'cs3d:attack': {
+          const attack = command.attack
+          if (attack !== 'light' && attack !== 'heavy') {
+            post({ type: 'cs3d:error', id, code: 'bad-params', message: `attack must be light or heavy (got ${JSON.stringify(attack)?.slice(0, 40)}).`, retryable: false, kept: now.status === 'loaded' })
+            break
+          }
+          // A swing that isn't built for the knife (or outside first person) is ignored.
+          runner.current?.swing(attack)
+          break
+        }
         case 'cs3d:getState':
           if (now.status === 'idle') post({ type: 'cs3d:state', id, status: 'loading', combo: null, view: current?.view ?? 'fp', map: DEFAULT_MAP, release: ASSET_LAYOUT.release, loadId: current?.id ?? null })
           else post({ type: 'cs3d:state', id, status: now.status, combo: now.combo, view: now.view, map: now.map, release: ASSET_LAYOUT.release, loadId: now.loadId })

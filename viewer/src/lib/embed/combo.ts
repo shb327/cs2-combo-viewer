@@ -11,7 +11,11 @@ export const COMBO_VERSION = 2
  * What this embed can do beyond protocol version 1, listed in `cs3d:ready` (docs/embed.md, "Version 2"): a feature is
  * listed only once it works.
  */
-export const COMBO_FEATURES = ['map', 'agents', 'input', 'keys', 'first-frame'] as const
+export const COMBO_FEATURES = ['attack', 'map', 'agents', 'input', 'keys', 'first-frame'] as const
+
+/** The knife's actions `cs3d:loaded` lists (those built for the knife drawn), and the swings `cs3d:attack` plays. */
+export type ComboAction = 'inspect' | 'light' | 'heavy'
+export type ComboAttack = 'light' | 'heavy'
 
 /** The map drawn when the page names none (the viewer's DEFAULT_LIGHTING.map). */
 export const DEFAULT_MAP = 'de_vertigo'
