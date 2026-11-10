@@ -10,7 +10,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | Done |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | Done |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent): the worker ([worker/](../worker/README.md)) | In review |
-| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices: protocol version 2 of the embed, in parts A (protocol) and B (attacks) | In review; B's upload waits |
+| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices: protocol version 2 of the embed, in parts A (protocol) and B (attacks) | Done (the site's window is next) |
 
 ## Decisions
 
@@ -953,7 +953,7 @@ phones (about 170 KB).
 
 ### B: attacks (branch `phase6-attacks`)
 
-Status: **built and checked locally; the upload waits for approval.** `features` gains `attack`.
+Status: **done** (PR #14; uploaded as release `71979e622923` on 2026-11-10). `features` gains `attack`.
 
 - [x] Where the game keeps them: each knife's folder `animation/anims/viewmodel/knife/<folder>/` has `light_hit1/2`,
   `light_miss1/2`, `heavy_hit1`, `heavy_miss1`, `light_backstab`, `light_backstab2`, `heavy_backstab` (the Navaja has
@@ -972,7 +972,7 @@ Status: **built and checked locally; the upload waits for approval.** `features`
   `cs3d:loaded` (`inspect`, `light`, `heavy` as built; empty in the orbit view), the clicks of `input=game`. The
   viewer's swings prefer the misses (`primaryAttacks`, `secondaryAttack` in `lib/data/attacks.ts`), which also
   changes the app's own attack menu from hits to misses.
-- [ ] The upload (waits for approval, below).
+- [x] The upload (below).
 
 #### Checks (part B)
 
@@ -989,21 +989,36 @@ Status: **built and checked locally; the upload waits for approval.** `features`
 
 #### Where it stopped
 
-Parts A (#13) and B (#14) are in review. Next: merge #13, then #14 (Pages deploys `main`), then the upload of
-`71979e622923` (`node pipeline\upload.mjs --dry-run`, then without it) once approved, and the site's window. Left for
-later: more maps (each needs its vanity VPK and an in-game screenshot, see the pipeline README), a real phone (iPhone)
+Parts A (#13) and B (#14) are merged and deployed, and release `71979e622923` is live. Next: the site's window. Left
+for later: more maps (each needs its vanity VPK and an in-game screenshot, see the pipeline README), a real phone (iPhone)
 on Vertigo, a lighter mode for phones (half-size textures, a smaller EXR), how the game picks `attack_variation`
 (the embed alternates), and the map's background on tall views (cropped at the sides by `object-fit: cover`).
 
-#### The upload (not done: waiting for approval)
+#### The upload (2026-11-10)
 
-`hosting.mjs` stages release **`71979e622923`**. Against what the bucket holds (the 2,402 objects of release
-`3de0d6e58111`): **1,507 new objects, 38.0 MB, all under `r/71979e622923/`** (viewer data 339 files 16.2 MB, of
+From `main` after both merges (pipeline code unchanged since the build: the build, `compress.mjs` and `hosting.mjs`
+rewrote nothing and staged the same release), `node pipeline\upload.mjs --dry-run`, then `node pipeline\upload.mjs`.
+Release **`71979e622923`**. Against what the bucket held (the 2,402 objects of release `3de0d6e58111`):
+**1,507 new objects, 38.0 MB (38,020,496 bytes), all under `r/71979e622923/`** (viewer data 339 files 16.2 MB, of
 which the 60 attack clips 3.9 MB and the new `attack_index.json`; the shaders 1,160 files 19.7 MB and the maps 8 files
 2.1 MB, copied unchanged into the new release folder), **no new `g/` file**, and `release.json` replaced last. Nothing
-is deleted; the old release stays.
+is deleted; the old release stays. Sent 1,508 files with the pointer; the bucket now holds **3,909 objects, 784.8 MB**,
+and every one of the manifest's 2,462 files is there with its size and MD5.
 
-**Order matters.** The live viewer follows `release.json`, and main's code (version 1) turns a click on `/combo`'s
+Checks after the upload:
+
+- `https://assets.combo.skin/release.json` names `71979e622923`.
+- `attack_index.json` and four clips (the Karambit's three, the Butterfly's heavy) answer 200, `application/json`,
+  `Cache-Control: public, max-age=31536000, immutable`, `Access-Control-Allow-Origin: https://view.combo.skin`;
+  another origin gets no CORS header.
+- `https://view.combo.skin/combo?<reference>&input=game` in headless Chrome (`C:\cs2-data\tools\p6-live.mjs`):
+  `cs3d:ready` version 2 with `attack` in `features`, release `71979e622923`; `cs3d:loaded` with `actions`
+  `inspect`, `light`, `heavy` on `de_vertigo`; a left click, a right click and F each play (`SHEET-live.png`, the
+  left swing frame by frame in `SHEET-live-seq.png`); no console error or failed request.
+- The reference through `/combo?capture=1`, on `view.combo.skin` and with `main` built pinned to `71979e622923`:
+  **byte-identical** to the capture before part A. Screenshots don't need redrawing.
+
+**Order matters** (kept for the next release with viewer-visible data). The live viewer follows `release.json`, and main's code (version 1) turns a click on `/combo`'s
 view into a swing as soon as the release has clips: today's site would start swinging on clicks. So upload only once
 parts A and B are merged and deployed (then the clips only play with `input=game` or `cs3d:attack`). Until the upload,
 part B's viewer lists `attack` but `actions` has no swings (the old release has no clips). The screenshot worker's
