@@ -1,4 +1,4 @@
-import type { ComboErrorCode, ComboInput, ComboMap, ComboView, NormalizedCombo } from './combo'
+import type { ComboAction, ComboErrorCode, ComboInput, ComboMap, ComboView, NormalizedCombo } from './combo'
 import { isAllowedOrigin, knownParentOrigin, learnParentOrigin, postToParent, whenParentOrigin } from './origins'
 
 /** The combo embed's messages (docs/embed.md). Every event that follows a command carries that command's `id`. */
@@ -6,6 +6,8 @@ export type ComboCommand =
   /** `map`: one of `cs3d:ready`'s maps; left out, the default map. */
   | { type: 'cs3d:load'; id?: string; combo: ComboInput; view?: ComboView; map?: string }
   | { type: 'cs3d:inspect'; id?: string }
+  /** Version 2: the knife's light swing (primary attack) or heavy swing (secondary), from its start. */
+  | { type: 'cs3d:attack'; id?: string; attack: unknown }
   | { type: 'cs3d:setView'; id?: string; view: ComboView }
   | { type: 'cs3d:getState'; id?: string }
   /** Only with the page's `capture=1`: the frame shown, as a PNG (after `cs3d:captureReady`). */
@@ -22,7 +24,7 @@ export type ComboEvent =
     features: string[]; maps: ComboMap[]; defaultMap: string; agents: number[]; defaultAgent: number
   }
   | { type: 'cs3d:progress'; id: string | null; loaded: number; total: number }
-  | { type: 'cs3d:loaded'; id: string | null; combo: NormalizedCombo; view: ComboView; map: string; release: string | null; ms: number }
+  | { type: 'cs3d:loaded'; id: string | null; combo: NormalizedCombo; view: ComboView; map: string; actions: ComboAction[]; release: string | null; ms: number }
   /** `kept`: the last drawn combo is still on screen (a refused command, or a failed change of agent or map). */
   | { type: 'cs3d:error'; id: string | null; code: ComboErrorCode; message: string; retryable: boolean; kept: boolean }
   | { type: 'cs3d:recovering'; id: string | null; reason: 'context-lost'; attempt: number }
@@ -34,7 +36,7 @@ export type ComboEvent =
   /** Reply to `cs3d:capture` (another name than the command's: a page that isn't framed gets its own events). */
   | { type: 'cs3d:captured'; id: string | null; png: Blob; width: number; height: number; coverage: number; combo: NormalizedCombo; release: string | null }
 
-const COMMANDS = new Set(['cs3d:load', 'cs3d:inspect', 'cs3d:setView', 'cs3d:getState', 'cs3d:capture', 'cs3d:loseContext'])
+const COMMANDS = new Set(['cs3d:load', 'cs3d:inspect', 'cs3d:attack', 'cs3d:setView', 'cs3d:getState', 'cs3d:capture', 'cs3d:loseContext'])
 
 /** The message as a combo command, or null (not one, or from an origin not on the list: ignored). */
 export function asComboCommand(e: MessageEvent): ComboCommand | null {
