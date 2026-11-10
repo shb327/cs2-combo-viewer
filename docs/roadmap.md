@@ -10,7 +10,7 @@ Each phase ends with something that runs. Later phases are rough and will change
 | 3. Coverage | Every knife and glove finish; the full asset pipeline; hosting. In parts A (build everything) and B (hosting) | Done |
 | 4. Embed API | The viewer in an iframe, driven by `postMessage`, used from a Combo Skin test page ([embed.md](embed.md)) | Done |
 | 5. Screenshots | Headless rendering of a combo to images (Ricksaw on Vertigo, or the combo's own agent): the worker ([worker/](../worker/README.md)) | In review |
-| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices | |
+| 6. Polish | Map and agent choice for visitors, attack animations, performance on low-end devices: protocol version 2 of the embed, in parts A (protocol) and B (attacks) | In progress |
 
 ## Decisions
 
@@ -872,6 +872,84 @@ headless with the worker's flags):
 - On the Vite dev server a `cs3d:load` posted right after the page loaded was sometimes never acted on in Safari (2 of
   7 loads in fresh sessions; no progress, no error). Not seen in 40 loads of the production build in Safari and the iOS
   simulator; to look at if it ever shows on the site.
+
+## Phase 6: the embed's window (protocol version 2)
+
+Combo Skin moves "View in 3D" into a large window over the page, with the game's actions (inspect on F, light swing on
+left click, heavy swing on right click) and the visitor's choice of map and agent, no free camera. The site's spec is
+done; this phase is the viewer's side. Everything new is opt-in: without the new parameters and commands the embed
+behaves as protocol version 1, so today's site and the screenshot worker keep working. Two parts, one branch and pull
+request each. Checks, tools and images in `C:\cs2-data\reference\compare\p6\` (tools: `C:\cs2-data\tools\p6-check.mjs`,
+`phone.mjs`, `combo-capture.mjs`).
+
+### A: protocol version 2 (branch `phase6-protocol`)
+
+Status: **done, in review**. The contract is [embed.md](embed.md) ("Version 2").
+
+- [x] `cs3d:ready`: `version: 2`, `features` (`map`, `agents`, `input`, `keys`, `first-frame`; `attack` comes with part
+  B), `maps` / `defaultMap` (from `maps.json`: ids `[a-z0-9_]` up to 32, names up to 40, never the studio),
+  `agents` / `defaultAgent` (every built agent's index; 5404). `ready` now waits for `maps.json` and `agents.json`
+  (both were fetched at start already).
+- [x] Maps: `map` in the URL and in `cs3d:load`; left out, the default; anything else `unknown-map` (not retryable);
+  `map` in `loaded` and `state`. A map whose files fail is `assets-unavailable`, never the studio.
+- [x] Phones draw the map in `/combo` (`mapOnMobile`); the studio stays for the app's own pages, where phones still get
+  it.
+- [x] Same combo, another agent or map: only the map changes (no reload) or the combo is drawn again with the new arms
+  (from the cache), the last frame, background included, frozen over it. On failure the old scene stays or is put
+  back, with `kept: true`. `kept` is on every `cs3d:error` (also `true` for a refused capture).
+- [x] `input=game`: mouse clicks play the swings (nothing until part B), F the inspect, Escape posted as `cs3d:key`;
+  touch and pen do nothing; the orbit and the fixed inspect don't move with the mouse; no pointer lock; a click
+  focuses the document.
+- [x] First frame: `cs3d:loaded` after two frames drawn with the combo in place (`SkinViewer.whenDrawn`), in every mode.
+- [x] Unknown URL parameters: ignored, as in version 1 (`comboFromParams` reads only the combo's keys, and the page
+  reads `view`, `map`, `ui`, `capture`, `debug`, `input` by name; main reads its own the same way, so `input=game` and
+  `map` reach an older embed harmlessly).
+- [x] Narrow views: first person already kept 16:9's horizontal angle on views narrower than 16:9 (phase 2C,
+  `viewmodelVerticalFov`); wider views and `capture=1` keep the vertical angle. Nothing changed.
+- [x] The test host: version, features, map and agent lists, unknown map and agent, attacks, `input=game`, Escape, a
+  placeholder until `loaded`.
+
+How it's built: `ComboRunner` loads a "scene" (combo, view, map) and keeps the last one drawn; `SkinViewer.setMap`
+returns whether the map is in (`MapStage.load` now says so; the old map stays on failure) and the embed turns the
+veil off (`mapVeil: false`): the page's frozen frame (`snapshotCanvas(true)`, with the background) covers the change.
+`setCameraInput(false)` turns off the orbit's rotate, zoom and pan and the fixed inspect's drag and wheel.
+`SkinViewer.swings` / `swing('light' | 'heavy')` map onto the viewer's attack list (primary, alternating; secondary).
+
+#### Checks (part A)
+
+All on this PC with the production build pinned to `3de0d6e58111`, assets from R2, headless Chrome.
+
+- **Capture mode unchanged**: the four test combos (the reference; Bloodhound Gloves | Charred, seed 42, float 0.2,
+  with the Ruby Karambit; Specialist | Big Swell; the vanilla Butterfly in Crimson Kimono) through `/combo?capture=1`
+  before (main) and after: **byte-identical PNGs**. Screenshots don't need redrawing; `RENDER_REVISION` stays.
+- **Protocol** (`p6-check.mjs protocol`, 20 checks, all pass): `ready`'s fields; `loaded` echoes the map; the same
+  combo with the map named loads in 0.1 s (nothing to change); an unknown map and `studio` give `unknown-map`, `kept`;
+  `getState` then still says the old request; another agent loads (2.6 s, warm); an unknown agent is `kept`; an
+  unknown map with another combo and an unknown knife are not `kept` (version 1's behaviour); `setView` keeps the
+  map; `cs3d:attack` is ignored without the feature.
+- **Kept on a failed load** (`keptfail`): Bloody Darryl's files blocked, a change of agent gives
+  `assets-unavailable`, `kept`, `retryable`; Ricksaw is drawn again and `getState` says `loaded`; unblocked, the agent
+  loads.
+- **Input** (`input`): after a click, F plays the inspect; Escape posts `cs3d:key` and G nothing; a drag and the wheel
+  don't move the orbit view.
+
+#### Phones (part A)
+
+Chrome's device mode (393×852, pixel ratio 3, touch, iPhone user agent; `phone.mjs`), cold, the reference combo by
+URL. The canvas draws at pixel ratio 2 (the viewer's cap), adaptive resolution on.
+
+| | Studio (main, version 1) | Vertigo (part A) |
+| --- | ---: | ---: |
+| Downloaded | 32.81 MB, 72 requests | 34.50 MB, 76 requests |
+| The map's files | | environment EXR 1.33 MB, background 320 KB (`-3840.webp`: a tall view covered at ×2 needs it), scene 1 KB, `maps.json` |
+| Loaded, no throttling | 2.6 s | 2.9 s |
+| Loaded, CPU 4× slower and 10 Mbit/s | 30.9 s | 33.9 s |
+
+So a phone downloads 1.7 MB (5%) more for the map. Nothing else changed for phones: the bulk is the same 29 MB of
+textures. Device mode measures layout, input and bytes, not a phone's GPU; a real phone still has to be tried (the
+branch has no preview address: Pages builds `main` only). Lighter options, not done: a half-size texture set for
+phones (most of the bytes; needs new assets), a smaller EXR for phones (1.3 MB), the background capped at 1.5× on
+phones (about 170 KB).
 
 ## Phase 6 notes (from phase 5)
 
