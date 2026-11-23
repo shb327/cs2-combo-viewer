@@ -65,6 +65,12 @@ DrawCall {
 }
 ```
 
+- `composite.uvScale` and `composite.weaponLength` are the composite inputs' `g_flUvScale1` and `g_flWeaponLength1`. The
+  game sizes knife textures (pattern, wear and grunge, for paints without `g_bIgnoreWeaponSizeScale`) by `g_flUvScale1`;
+  `g_flWeaponLength1` doesn't match it on several knives (checked against in-game pictures of the Gut Knife and renders
+  of three other knives). The viewer gives the composite `uvScale × 36` as its weapon length, so its `weaponLength / 36`
+  expressions give `uvScale`; `weaponLength` is used only when a knife has no `uvScale`.
+
 - Knives: the mesh used is `body_hd`, else `body_legacy` (`kit.legacyModel`), else the first mesh matching `body`.
 - Gloves: only meshes whose name contains `viewmodel` are used; a primitive is a hand when its material is `glove_<name>_left|right`, the arm when it starts with `bare_arm`.
 
