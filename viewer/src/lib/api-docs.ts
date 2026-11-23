@@ -84,7 +84,7 @@ export const COMMANDS: DocRow[] = [
   { name: "{ type: 'cs3d:inspectGloves' }", description: 'Looks at the gloves: in first person with skin gloves, or on a gloves skin.' },
   { name: "{ type: 'cs3d:resetView' }", description: 'Puts the camera back (and side to front).' },
   { name: "{ type: 'cs3d:screenshot', id? }", description: 'Replies cs3d:screenshot with a PNG data URL.' },
-  { name: "{ type: 'cs3d:screenshots', id?, longSide? }", description: 'Replies cs3d:screenshots with the item alone from the front and from the back, as two transparent PNG Blobs (longSide pixels at most, 2400 by default).' },
+  { name: "{ type: 'cs3d:screenshots', id?, longSide? }", description: 'Replies cs3d:screenshots with the item alone from the front and from the back (the item turned half way round under the same light), as two transparent PNG Blobs (longSide pixels at most, 2400 by default).' },
   { name: "{ type: 'cs3d:share', id? }", description: 'Replies cs3d:share with the share link: the short /share/<code>, or the full link when the view doesn’t fit a code.' },
   { name: "{ type: 'cs3d:openShare' }", description: 'Opens the share dialog inside the embed (the link to copy, or an image card to download).' },
   { name: "{ type: 'cs3d:getState', id? }", description: 'Replies cs3d:state with the current settings.' },
