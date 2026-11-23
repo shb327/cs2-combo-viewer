@@ -1,5 +1,6 @@
 import type { Item, PaintParams, Rgb, Vec4 } from '@/lib/data/items'
 import type { Vmat } from '@/lib/materials/glove'
+import { compositeWeaponLength } from '@/lib/materials/weapon-size'
 
 /** Where the viewer data and the decoded game files live (relative to the asset base): see asset-layout. */
 export { GAME_ROOT, VIEWER_DATA } from '@/lib/asset-layout'
@@ -275,7 +276,8 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
   if (kit.shader === 'csgo_customweapon.vfx' && ci && kit.passes?.g_tColor && kit.passes.g_tMetalness) {
     const sources = {
       composite_inputs: {
-        params: { g_flUvScale1: ci.uvScale ?? 1, g_flWeaponLength1: ci.weaponLength ?? 32, F_SEPARATE_CHANNEL_INPUTS: ci.separateChannels ?? 0 },
+        // The game sizes knife textures by g_flUvScale1, not by the inputs' g_flWeaponLength1 (see compositeWeaponLength).
+        params: { g_flUvScale1: ci.uvScale ?? 1, g_flWeaponLength1: compositeWeaponLength(ci), F_SEPARATE_CHANNEL_INPUTS: ci.separateChannels ?? 0 },
         textures: {
           g_tAmbientOcclusion: ci.ao, g_tColor: ci.color, g_tMasks: ci.masks, g_tMetalness: ci.rough, g_tPosition: ci.pos, g_tSurface: ci.surface,
         },
