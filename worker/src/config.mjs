@@ -10,7 +10,7 @@ const MAX_RENDER_TIMEOUT_S = 270
 
 export class ConfigError extends Error {}
 
-const DEFAULT_CHROME = {
+export const DEFAULT_CHROME = {
   win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   linux: '/usr/bin/google-chrome',

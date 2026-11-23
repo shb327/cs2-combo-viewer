@@ -70,6 +70,7 @@ From `worker/`:
 | `npm run once` | Works through the queue and exits at the first 204 |
 | `npm test` | The tests, against a fake API (no browser, no network) |
 | `npm run e2e` | End to end with Chrome and the assets from R2, against the fake API ([below](#checks)) |
+| `npm run refcheck -- --refs <folder> --out <folder>` | Compares the viewer's knives with reference pictures ([below](#reference-check)) |
 
 Exit codes: 0 done, 1 unexpected error, 2 settings or token refused, 3 port 5321 in use, 4 no usable GPU.
 
@@ -118,3 +119,36 @@ Knife, Bloody Darryl The Strapped) cold in a new browser and warm in the same on
 browser's own screenshot of the page, then runs `node src/main.mjs --once` through a queue of the four and a combo
 without seeds against the fake API. `E2E_OUT` and `E2E_PROFILES` choose where the PNGs, `timings.json` and the browser
 profiles go (default `test/.tmp/`, not in git).
+
+## Reference check
+
+`npm run refcheck -- --refs <folder> --out <folder>` compares the viewer's knives with reference pictures of the same
+knives from another inspect view (a black background, the knife side on). It is a check to run by hand after a change
+to how finishes are drawn; nothing in it runs in the worker's loop.
+
+- **Input**: `<folder>/manifest.csv`, one row per picture: `picture`, `group`, `knife`, `finish`, `phase`, `seed`,
+  `wear`, `side` (`front` or `back`), with knives and finishes as Combo Skin's pattern groups write them
+  (`m9-bayonet`, `gamma-doppler-phase-4`). The pictures stay where they are: they are never copied into the repository.
+- **Ours**: every knife drawn by this worker's own build (`viewer-dist/`, `npm run build` first) served on
+  `127.0.0.1:5320` (the worker keeps 5321): the single-item embed in the studio's light, the knife alone, front and back
+  (`cs3d:screenshots`), at the manifest's seed and wear. The same knife vanilla, drawn the same way, gives the painted
+  parts: where the finish differs from it.
+- **Lining up**: by the outline only. Our front and back, each mirrored or not, are turned, scaled and moved for the
+  best overlap (IoU) with the reference's outline. When two arrangements fit the outline equally (a near-symmetric
+  knife), the pattern chooses, and the report marks it.
+- **Scores** (0–1, on the painted parts only, the light's colour matched on the bare parts first):
+  - Case Hardened: where blue and gold sit (rank correlation of b*) and how much blue there is.
+  - Scorched, Safari Mesh, Urban Masked: where light and dark sit, and how much the paint varies, measured in a band
+    of scales that leaves out the light's own slow bands along a blade; and the overall tone.
+  - Fade, Marble Fade, Doppler and Gamma Doppler: the hue gap pixel by pixel, and the mix of colours.
+  - A pair below 0.5 is flagged. Checked on the two earlier fixes: Bayonet | Case Hardened 395 scores 0.43 and 0.30
+    before "Size knife textures by the composite's UV scale" and 0.88 and 0.90 after; Shadow Daggers | Scorched 730
+    0.47 and 0.44 before "Size spray and airbrush knife patterns by weapon length" and 0.73 and 0.85 after.
+- **Output** in `--out`: `report.md` (the table, worst first: arrangement, outline overlap, score, our other side's
+  score, a likely cause), `results.csv`, `results.json`, `sheets/` (the reference, ours as it fits, and our other side,
+  for each flagged pair) and `contact-sheet.png` (every pair). Renders are kept in `renders/<release>-<commit>/`, so a
+  second run only scores; `--fresh` draws them again.
+
+Options: `--only <text>[,<text>…]` checks only the pictures whose name contains one of them, `--sheets all` writes a
+sheet for every pair, `--viewer-dist <folder>` uses another build (to compare before and after a change).
+`node --test test/refcheck.test.mjs` tests the alignment and the scores on synthetic pictures.
