@@ -276,8 +276,8 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
   if (kit.shader === 'csgo_customweapon.vfx' && ci && kit.passes?.g_tColor && kit.passes.g_tMetalness) {
     const sources = {
       composite_inputs: {
-        // The game sizes knife textures by g_flUvScale1, not by the inputs' g_flWeaponLength1 (see compositeWeaponLength).
-        params: { g_flUvScale1: ci.uvScale ?? 1, g_flWeaponLength1: compositeWeaponLength(ci), F_SEPARATE_CHANNEL_INPUTS: ci.separateChannels ?? 0 },
+        // UV-sampled styles are sized by g_flUvScale1, position-projected ones by g_flWeaponLength1 (see compositeWeaponLength).
+        params: { g_flUvScale1: ci.uvScale ?? 1, g_flWeaponLength1: compositeWeaponLength(ci, kit.style), F_SEPARATE_CHANNEL_INPUTS: ci.separateChannels ?? 0 },
         textures: {
           g_tAmbientOcclusion: ci.ao, g_tColor: ci.color, g_tMasks: ci.masks, g_tMetalness: ci.rough, g_tPosition: ci.pos, g_tSurface: ci.surface,
         },
