@@ -26,6 +26,7 @@ import { WeaponAttachments } from '@/lib/viewer/weapon-attachments'
 import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, STUDIO_ENVIRONMENT, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel, viewmodelVerticalFov } from '@/lib/viewer/viewer-options'
 import { cropToContent } from '@/lib/canvas'
 import { AttachmentEditor, type EditorEvents } from '@/lib/viewer/attachment-editor'
+import { drawSides } from '@/lib/viewer/item-sides'
 
 export { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel }
 
@@ -835,9 +836,9 @@ export class SkinViewer {
   }
 
   /**
-   * The item alone from the front (the initial framing) and from the back (a half turn around it), each drawn with
-   * `longSide` pixels on its longer side and cut down to what it covers. The camera is left at the front. A knife is
-   * shot standing up.
+   * The item alone from the front (the initial framing) and from the back (the item turned half way round under the
+   * same light), each drawn with `longSide` pixels on its longer side and cut down to what it covers. The camera is left
+   * at the front. A knife is shot standing up.
    */
   renderSides(longSide: number): { front: HTMLCanvasElement; back: HTMLCanvasElement } {
     /** Over a map the item is the one that turns, in the frame loop's step: it has to be applied before drawing now. */
@@ -845,16 +846,21 @@ export class SkinViewer {
     /** A knife is shot standing up (whatever pose the viewer shows it in), and left as it was. */
     const pose = this.knifePose
     if (this.isKnife()) this.setKnifePose('vertical')
-    this.resetView()
-    settle()
-    const front = this.renderItem(longSide)
-    this.backView()
-    settle()
-    const back = this.renderItem(longSide)
+    const sides = drawSides({
+      resetView: () => { this.resetView(); settle() },
+      turnBack: () => {
+        if (this.firstPerson) return
+        // Over a map the game's own inspect turns the item already; in the studio the item turns too, not the camera,
+        // so its lights (fixed around the model) light the back as they lit the front.
+        if (this.fixed.active) { this.fixed.flip(); settle(); return }
+        this.holder.rotation.y += Math.PI
+      },
+      draw: () => this.renderItem(longSide),
+    })
     if (this.isKnife()) this.setKnifePose(pose)
     this.resetView()
     settle()
-    return { front, back }
+    return sides
   }
 
   /** The current view as a PNG data URL (transparent where the scene has no background). */
