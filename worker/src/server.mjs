@@ -31,10 +31,11 @@ export function parseHeaders(text) {
 }
 
 /**
- * Starts the server on the build in `root`.
+ * Starts the server on the build in `root`. `routes` adds pages of its own (path → `{ type, body }`), served with
+ * the build's headers, ahead of its files.
  * @returns {Promise<{ url: string, close: () => Promise<void> }>}
  */
-export function serveViewer(root, { host = VIEWER_HOST, port = VIEWER_PORT } = {}) {
+export function serveViewer(root, { host = VIEWER_HOST, port = VIEWER_PORT, routes = {} } = {}) {
   root = path.resolve(root)
   const headersFile = path.join(root, '_headers')
   const rules = existsSync(headersFile) ? parseHeaders(readFileSync(headersFile, 'utf8')) : []
@@ -43,6 +44,15 @@ export function serveViewer(root, { host = VIEWER_HOST, port = VIEWER_PORT } = {
     let urlPath
     try { urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname) } catch { res.writeHead(400).end(); return }
     for (const rule of rules) if (rule.pattern.test(urlPath)) for (const [k, v] of rule.headers) res.setHeader(k, v)
+    const route = Object.hasOwn(routes, urlPath) ? routes[urlPath] : null
+    if (route) {
+      const body = Buffer.from(route.body)
+      res.setHeader('Content-Type', route.type)
+      res.setHeader('Content-Length', body.length)
+      res.writeHead(200)
+      res.end(req.method === 'HEAD' ? undefined : body)
+      return
+    }
     let file = path.join(root, path.normalize(urlPath))
     if (!file.startsWith(root + path.sep) && file !== root) { res.writeHead(403).end(); return }
     let stat = existsSync(file) ? statSync(file) : null
