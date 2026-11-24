@@ -5,16 +5,18 @@ import { blankReason, decode, header, PngError, withText } from './png.mjs'
 
 /** A render that failed: the API's reason, a short detail, and whether the browser is still fit for the next job. */
 export class RenderError extends Error {
-  constructor(reason, detail, { fatal = false, release = null } = {}) {
+  constructor(reason, detail, { fatal = false, release = null, exitCode = 4 } = {}) {
     super(detail)
     this.reason = reason
     this.fatal = fatal
+    /** The worker's exit code when it is fatal: 4 no usable GPU, 5 Chrome can't be started. */
+    this.exitCode = exitCode
     /** Release the claim with this reason instead of reporting a failure (no GPU: not the combo's fault). */
     this.release = release
   }
 }
 
-/** The worker can't go on (a refused token, no GPU): it stops with this exit code. */
+/** The worker can't go on (a refused token, no GPU, no Chrome): it stops with this exit code. */
 export class FatalError extends Error {
   constructor(message, exitCode) { super(message); this.exitCode = exitCode }
 }
@@ -155,7 +157,7 @@ export function createWorker({ api, renderer, log, config, now = Date.now }) {
       if (e instanceof RenderError) {
         if (e.release) { await releaseJob(job, e.release) }
         else await reportFailure(job, e.reason, e.message)
-        if (e.fatal) throw new FatalError(`Stopping: ${e.message}`, 4)
+        if (e.fatal) throw new FatalError(`Stopping: ${e.message}`, e.exitCode)
         return
       }
       if (e instanceof PngError) { await reportFailure(job, 'render_failed', `the frame is not a valid PNG: ${e.message}`); return }

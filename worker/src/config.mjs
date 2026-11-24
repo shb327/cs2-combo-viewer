@@ -1,6 +1,7 @@
 // The worker's settings, all from environment variables (worker/README.md, "Settings").
 import os from 'node:os'
 import path from 'node:path'
+import { VIEWER_PORT, VIEWER_PORTS } from './server.mjs'
 
 /** A worker token as the dashboard makes it: `csw_` and 43 base64url characters (256 bits). */
 export const TOKEN_PATTERN = /^csw_[A-Za-z0-9_-]{43}$/
@@ -24,6 +25,16 @@ function seconds(env, name, fallback, min, max) {
   const n = Number(raw)
   if (n < min || n > max) throw new ConfigError(`${name} must be from ${min} to ${max} seconds.`)
   return n
+}
+
+/** The port the worker serves its viewer on: only the two the asset bucket's CORS allows. */
+function viewerPort(raw) {
+  if (raw === undefined || raw.trim() === '') return VIEWER_PORT
+  const port = Number(raw.trim())
+  if (!/^\d+$/.test(raw.trim()) || !VIEWER_PORTS.includes(port)) {
+    throw new ConfigError(`WORKER_VIEWER_PORT must be ${VIEWER_PORTS.join(' or ')}: the asset bucket's CORS allows only these.`)
+  }
+  return port
 }
 
 /** The API's address: https, or plain http only on this machine. */
@@ -52,6 +63,8 @@ export function readConfig(env = process.env) {
     apiUrl: apiUrl(env.COMBO_API_URL?.trim()),
     renderTimeoutMs: seconds(env, 'WORKER_RENDER_TIMEOUT', 120, 10, MAX_RENDER_TIMEOUT_S) * 1000,
     pollIntervalMs: seconds(env, 'WORKER_POLL_INTERVAL', 60, 5, 3600) * 1000,
+    browserIdleMs: seconds(env, 'WORKER_BROWSER_IDLE', 60, 10, 3600) * 1000,
+    viewerPort: viewerPort(env.WORKER_VIEWER_PORT),
     chromePath: env.CHROME_PATH?.trim() || DEFAULT_CHROME[process.platform] || 'google-chrome',
     profileDir: path.resolve(env.WORKER_PROFILE_DIR?.trim() || path.join(os.homedir(), '.cache', 'cs2-combo-worker', 'chrome-profile')),
   }

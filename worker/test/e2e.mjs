@@ -4,7 +4,7 @@
 //   2. the worker itself (`node src/main.mjs --once`) through a queue of the four combos, its PNGs checked as the API
 //      checks them and against the captures of step 1.
 // Needs `npm run build` first. Settings: E2E_OUT (where the PNGs and timings go, default test/.tmp/e2e),
-// E2E_PROFILES (the browser profiles, default test/.tmp/profiles), CHROME_PATH.
+// E2E_PROFILES (the browser profiles, default test/.tmp/profiles), CHROME_PATH, WORKER_VIEWER_PORT (5321 or 5320).
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -21,7 +21,7 @@ const root = path.resolve(here, '..')
 const out = path.resolve(process.env.E2E_OUT || path.join(here, '.tmp', 'e2e'))
 const profiles = path.resolve(process.env.E2E_PROFILES || path.join(here, '.tmp', 'profiles'))
 const build = JSON.parse(readFileSync(path.join(root, 'viewer-dist', 'worker-build.json'), 'utf8'))
-const chromePath = readConfig({ COMBO_WORKER_TOKEN: 'csw_' + 'x'.repeat(43), COMBO_API_URL: 'http://127.0.0.1:1', CHROME_PATH: process.env.CHROME_PATH }).chromePath
+const { chromePath, viewerPort } = readConfig({ COMBO_WORKER_TOKEN: 'csw_' + 'x'.repeat(43), COMBO_API_URL: 'http://127.0.0.1:1', CHROME_PATH: process.env.CHROME_PATH, WORKER_VIEWER_PORT: process.env.WORKER_VIEWER_PORT })
 mkdirSync(out, { recursive: true })
 
 const kimono = { def_index: 5034, paint_index: 10033, float: 0.15, seed: 269, name: 'Specialist Gloves | Crimson Kimono' }
@@ -42,7 +42,7 @@ const check = (ok, what) => { if (!ok) failures.push(what); console.log(`${ok ? 
 const jobFor = (c) => ({ job_id: 'e2e', combo_id: c.name, image: { width: 1920, height: 1080, type: 'image/png' }, glove: c.glove, knife: c.knife, agent: c.agent, render_revision: 1 })
 
 // 1. Cold and warm, and the capture against the page.
-const server = await serveViewer(path.join(root, 'viewer-dist'))
+const server = await serveViewer(path.join(root, 'viewer-dist'), { port: viewerPort })
 const timings = []
 const captures = new Map()
 try {

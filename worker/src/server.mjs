@@ -1,11 +1,12 @@
-// Serves the worker's own viewer build on 127.0.0.1:5321, with the headers the hosted viewer sends (its _headers).
-// The port is fixed: the asset bucket's CORS allows only this viewer's own local ports (5320 and 5321).
+// Serves the worker's own viewer build on 127.0.0.1:5321 (or 5320), with the headers the hosted viewer sends (its
+// _headers). Only these two ports: the asset bucket's CORS allows only this viewer's own local ports.
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 
 export const VIEWER_HOST = '127.0.0.1'
 export const VIEWER_PORT = 5321
+export const VIEWER_PORTS = [5320, 5321]
 
 export class PortInUseError extends Error {}
 
@@ -71,7 +72,7 @@ export function serveViewer(root, { host = VIEWER_HOST, port = VIEWER_PORT, rout
   return new Promise((resolve, reject) => {
     server.once('error', (e) => {
       if (e.code === 'EADDRINUSE') {
-        reject(new PortInUseError(`Port ${port} on ${host} is already in use. The worker needs exactly this port: the asset bucket's CORS allows only ${host}:5320 and :5321. Stop what uses it (often the viewer's own "npm run preview") and start the worker again.`))
+        reject(new PortInUseError(`Port ${port} on ${host} is already in use. The worker needs this port: the asset bucket's CORS allows only ${host}:5320 and :5321. Stop what uses it (often the viewer's own "npm run preview" or another worker) and start the worker again, or set WORKER_VIEWER_PORT to the other one.`))
       } else reject(e)
     })
     server.listen(port, host, () => resolve({
