@@ -248,8 +248,9 @@ export class ComboRunner {
       viewer = new SkinViewer(this.container, {
         assetBase: ASSET_BASE, background: null, antialias: true, readableBackground: capture,
         // Phones get the map too. A change of map keeps the old one until the new one is in, under the page's frozen
-        // frame. Clicks are the page's (input=game): the viewer's own click attacks stay off.
-        mapOnMobile: true, mapVeil: false, pointerAttacks: false,
+        // frame. Clicks are the page's (input=game): the viewer's own click attacks stay off. With input=game the mouse
+        // moves nothing: the hands breathe but don't lean toward the pointer.
+        mapOnMobile: true, mapVeil: false, pointerAttacks: false, pointerLean: !this.options.gameInput,
       })
     } catch (e) {
       this.events.error('context-lost', `The browser couldn't start 3D (${(e as Error).message}).`, true, false)

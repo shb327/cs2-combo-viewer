@@ -176,7 +176,8 @@ With `input=game` in the URL, in first person:
   inspect, each from its start, cutting what plays. A swing the knife has no animation for does nothing. Holding F
   doesn't repeat it.
 - Only the mouse: **touch and pen do nothing**.
-- The mouse never turns or zooms the view (in the orbit view either), and the pointer is never locked.
+- The mouse never turns or zooms the view (in the orbit view either), and the pointer is never locked. Moving it over
+  the view doesn't move the hands either: they breathe as in the game but don't lean toward the pointer.
 - A click gives the embed's document the keyboard's focus, so F works after it.
 - **Escape** isn't acted on in the embed: it posts `cs3d:key { id: null, key: 'Escape' }` to the parent (to its
   origin only, as every event), so the page can close its window. No other key is forwarded.

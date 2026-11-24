@@ -27,6 +27,11 @@ export interface SkinViewerOptions extends WeaponFinishOptions {
    * menu). Default true.
    */
   pointerAttacks?: boolean
+  /**
+   * First person, with the viewmodel's sway on: the weapon leans toward the pointer. Off (the combo embed's
+   * `input=game`), the pointer moves nothing and only the breathing is left. Default true.
+   */
+  pointerLean?: boolean
 }
 
 /** How finely the viewer draws: for slower devices. */
@@ -128,7 +133,7 @@ export interface Viewmodel {
   offsetZ: number
   /** Hold the weapon in the left hand (the viewmodel mirrored). */
   leftHanded: boolean
-  /** The weapon leans a little toward the pointer and breathes when idle. */
+  /** The weapon breathes when idle and leans a little toward the pointer (unless the viewer's `pointerLean` is off). */
   sway: boolean
   /** The first-person gloves' float and pattern (null = the gloves' own). */
   gloveFloat: number
