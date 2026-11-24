@@ -5,7 +5,7 @@
  * of them, never to '*'. The same sites are the only ones allowed to frame the viewer (frame-ancestors in
  * public/_headers).
  */
-const SITES = ['https://combo.skin', 'https://view.combo.skin', 'https://admin.combo.skin']
+const SITES = ['https://combo.skin', 'https://view.combo.skin', 'https://combo-skin.pages.dev', 'https://preview.combo-skin.pages.dev']
 
 /**
  * Local ports: Combo Skin's site (5173 dev, 4173 preview), its admin dashboard (5174), this viewer (5320 dev,

@@ -251,7 +251,10 @@ window.postMessage({ type: 'cs3d:capture', id: 'job1' }, location.origin)
 The embed accepts messages only from these origins, and only from its parent window; anything else is ignored without
 a reply. It posts only to its parent's origin, never to `'*'`.
 
-- `https://combo.skin`, `https://view.combo.skin`, `https://admin.combo.skin`
+- `https://combo.skin`, `https://view.combo.skin`
+- `https://combo-skin.pages.dev` and `https://preview.combo-skin.pages.dev`: Combo Skin's site on Cloudflare Pages
+  (production and preview deploys), for testing before it moves to combo.skin. Only these two: no other `*.pages.dev`
+  address, not even a deploy's own `<hash>.combo-skin.pages.dev`
 - `http://localhost:<port>` and `http://127.0.0.1:<port>` for ports 5173 and 4173 (Combo Skin's site, dev and
   preview), 5174 (its admin dashboard), 5320 and 5321 (this viewer, dev and preview) and 5322 (the test page)
 
@@ -270,7 +273,8 @@ else `document.referrer`, else the first message from an allowed origin. So:
 
 The hosted viewer sends (`viewer/public/_headers`, Cloudflare Pages' format; `vite preview` sends the same):
 
-- `Content-Security-Policy: frame-ancestors 'self' https://combo.skin https://admin.combo.skin http://localhost:*
+- `Content-Security-Policy: frame-ancestors 'self' https://combo.skin https://combo-skin.pages.dev
+  https://preview.combo-skin.pages.dev http://localhost:*
   http://127.0.0.1:*`: other sites can't put the viewer in their pages. The same policy limits what the viewer itself
   loads: scripts from its own origin only (`'wasm-unsafe-eval'` for three.js' mesh decoder, no `eval`), data from
   itself and `https://assets.combo.skin`, no plugins, no forms.

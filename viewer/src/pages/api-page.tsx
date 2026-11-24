@@ -96,7 +96,7 @@ export function ApiPage() {
           <ApiSection id="notes" title="Good to know">
             <ul className="grid gap-3 md:grid-cols-2">
               {[
-                ['Framing', <>Only combo.skin, admin.combo.skin and local development pages may frame the viewer (<code className="text-brand-200">frame-ancestors</code>).</>],
+                ['Framing', <>Only combo.skin, its test addresses (combo-skin.pages.dev, preview.combo-skin.pages.dev) and local development pages may frame the viewer (<code className="text-brand-200">frame-ancestors</code>).</>],
                 ['Transparent', <><code className="text-brand-200">bg=transparent</code> drops the studio backdrop: your page shows through behind the item.</>],
                 ['Example page', <>A plain HTML page driving an embed: <a className="text-brand-300 underline-offset-2 hover:underline" href="/embed-example.html">/embed-example.html</a>.</>],
               ].map(([title, body]) => (
