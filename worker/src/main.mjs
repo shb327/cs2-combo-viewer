@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { createApi } from './api.mjs'
 import { ConfigError, readConfig } from './config.mjs'
-import { createLog } from './log.mjs'
+import { createLog, fileWriter } from './log.mjs'
 import { createRenderer } from './renderer.mjs'
 import { PortInUseError, serveViewer } from './server.mjs'
 import { createWorker, FatalError } from './worker.mjs'
@@ -12,7 +12,12 @@ import { createWorker, FatalError } from './worker.mjs'
 /** The look of combos this worker draws; Combo Skin's RENDER_REVISION (screenshots/inputs.py) is raised with it. */
 export const RENDER_REVISION = 1
 
-const log = createLog()
+// WORKER_LOG_FILE: the log goes to that file (moved to .1 at 5 MB) instead of stdout; the macOS service sets it.
+const logFile = process.env.WORKER_LOG_FILE?.trim()
+const log = createLog(logFile ? { write: fileWriter(path.resolve(logFile)) } : {})
+for (const event of ['uncaughtException', 'unhandledRejection']) {
+  process.on(event, (e) => { log.error('unexpected error', { error: e?.stack ?? String(e) }); process.exit(1) })
+}
 const args = new Set(process.argv.slice(2))
 for (const a of args) if (!['--once', '--help'].includes(a)) { console.error(`Unknown option ${a}. Usage: node src/main.mjs [--once]`); process.exit(2) }
 if (args.has('--help')) { console.log('Usage: node src/main.mjs [--once]   (settings: worker/README.md)'); process.exit(0) }
@@ -51,9 +56,10 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 try {
-  server = await serveViewer(dist)
-  renderer = createRenderer({ viewerUrl: server.url, release: build.release, chromePath: config.chromePath, profileDir: config.profileDir, log })
-  log.info('starting', { version, release: build.release, viewer_commit: build.commit, api: config.apiUrl, timeout_s: config.renderTimeoutMs / 1000 })
+  server = await serveViewer(dist, { port: config.viewerPort })
+  renderer = createRenderer({ viewerUrl: server.url, release: build.release, chromePath: config.chromePath, profileDir: config.profileDir, idleMs: config.browserIdleMs, log })
+  log.info('starting', { version, release: build.release, viewer_commit: build.commit, api: config.apiUrl, viewer: server.url, timeout_s: config.renderTimeoutMs / 1000, browser_idle_s: config.browserIdleMs / 1000 })
+  // The browser is checked at once (its GPU, WebGL2, the release), then closed when there's no work.
   await renderer.start()
   const api = createApi({ apiUrl: config.apiUrl, token: config.token, userAgent: `cs2-combo-worker/${version}` })
   worker = createWorker({ api, renderer, log, config: { ...config, renderRevision: RENDER_REVISION } })
@@ -62,7 +68,7 @@ try {
   log.info('stopped', stats)
 } catch (e) {
   if (e instanceof PortInUseError || e instanceof FatalError) { log.error(e.message); exitCode = e.exitCode ?? 3 }
-  else if (e?.fatal) { log.error(`Stopping: ${e.message}`); exitCode = 4 }
+  else if (e?.fatal) { log.error(`Stopping: ${e.message}`); exitCode = e.exitCode ?? 4 }
   else { log.error('unexpected error', { error: e?.stack ?? String(e) }); exitCode = 1 }
 } finally {
   await shutdown()
