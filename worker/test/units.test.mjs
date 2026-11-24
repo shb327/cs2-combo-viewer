@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { test } from 'node:test'
+import { freeProfile } from '../src/chrome.mjs'
 import { readConfig } from '../src/config.mjs'
 import { comboFor, jobProblem } from '../src/job.mjs'
-import { createLog, redact } from '../src/log.mjs'
+import { createLog, fileWriter, redact } from '../src/log.mjs'
 import { blankReason, decode, header, texts, withText } from '../src/png.mjs'
 import { comboJob } from './fake-api.mjs'
 import { drawnFrame, encodePng } from './helpers.mjs'
@@ -52,6 +57,33 @@ test('config: needs the address and a well-formed token, and never shows the tok
   assert.ok(!Object.keys(c).includes('token'))
 })
 
+test('config: the viewer\'s port is 5321 or 5320, the browser\'s idle time 60 s unless set', () => {
+  const base = { COMBO_WORKER_TOKEN: TOKEN, COMBO_API_URL: 'http://127.0.0.1:8000' }
+  const c = readConfig(base)
+  assert.equal(c.viewerPort, 5321)
+  assert.equal(c.browserIdleMs, 60_000)
+  assert.equal(readConfig({ ...base, WORKER_VIEWER_PORT: '5320' }).viewerPort, 5320)
+  for (const bad of ['8080', '5322', 'x', '5320.0']) assert.throws(() => readConfig({ ...base, WORKER_VIEWER_PORT: bad }), /WORKER_VIEWER_PORT must be 5320 or 5321/)
+  assert.equal(readConfig({ ...base, WORKER_BROWSER_IDLE: '30' }).browserIdleMs, 30_000)
+  assert.throws(() => readConfig({ ...base, WORKER_BROWSER_IDLE: '5' }), /WORKER_BROWSER_IDLE must be from 10 to 3600/)
+})
+
+test('log file: lines appended, the file moved to .1 when it passes its size, one old file kept', () => {
+  const tmp = path.join(import.meta.dirname, '.tmp')
+  mkdirSync(tmp, { recursive: true })
+  const file = path.join(mkdtempSync(path.join(tmp, 'log-')), 'logs', 'worker.log')
+  const write = fileWriter(file, { maxBytes: 100 })
+  for (let i = 0; i < 4; i++) write(`line ${i} ${'x'.repeat(30)}`)
+  // 38 bytes a line: two fit in 100.
+  const lines = (...n) => n.map((i) => `line ${i} ${'x'.repeat(30)}\n`).join('')
+  assert.equal(readFileSync(file + '.1', 'utf8'), lines(0, 1))
+  assert.equal(readFileSync(file, 'utf8'), lines(2, 3))
+  for (let i = 4; i < 8; i++) write(`line ${i} ${'x'.repeat(30)}`)
+  assert.equal(readFileSync(file + '.1', 'utf8'), lines(4, 5))
+  assert.equal(readFileSync(file, 'utf8'), lines(6, 7))
+  assert.ok(!existsSync(file + '.2'))
+})
+
 test('log: tokens are redacted from every line', () => {
   const lines = []
   const log = createLog({ write: (l) => lines.push(l), now: () => new Date(0) })
@@ -73,4 +105,27 @@ test('job: null seeds and a vanilla knife\'s float are left out for the viewer\'
   assert.deepEqual(comboFor(seeded), { knife: 515, knife_paint: 419, knife_float: 0, knife_seed: 387, gloves: 5034, gloves_paint: 10064, gloves_float: 0.06, gloves_seed: 12, agent: 5404 })
   assert.match(jobProblem({ ...job, image: { width: 1280, height: 720, type: 'image/png' } }), /1280x720/)
   assert.match(jobProblem({ ...job, glove: { ...job.glove, seed: 5000 } }), /bad seed/)
+})
+
+test('chrome: a process left on the profile is stopped; one on another profile is not', { skip: process.platform === 'win32' }, async () => {
+  const tmp = path.join(import.meta.dirname, '.tmp')
+  mkdirSync(tmp, { recursive: true })
+  const ours = mkdtempSync(path.join(tmp, 'profile-'))
+  const other = mkdtempSync(path.join(tmp, 'profile-'))
+  const leftOver = (dir) => spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', `--user-data-dir=${dir}`], { stdio: 'ignore' })
+  const a = leftOver(ours), b = leftOver(other)
+  const exited = new Promise((r) => a.once('exit', r))
+  try {
+    await new Promise((r) => setTimeout(r, 200))
+    symlinkSync(`${os.hostname()}-${a.pid}`, path.join(ours, 'SingletonLock'))
+    symlinkSync(`${os.hostname()}-${b.pid}`, path.join(other, 'SingletonLock'))
+    // A lock that names another profile's process (a copied profile, say) is left alone.
+    const copy = mkdtempSync(path.join(tmp, 'profile-'))
+    symlinkSync(`${os.hostname()}-${b.pid}`, path.join(copy, 'SingletonLock'))
+    assert.equal(await freeProfile(copy), null)
+    assert.equal(await freeProfile(ours), a.pid)
+    await exited
+    assert.equal(b.exitCode, null, 'the other profile\'s process still runs')
+    assert.equal(await freeProfile(mkdtempSync(path.join(tmp, 'profile-'))), null, 'no lock: nothing to do')
+  } finally { a.kill('SIGKILL'); b.kill('SIGKILL') }
 })
