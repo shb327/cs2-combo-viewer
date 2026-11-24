@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The screenshot worker as a LaunchAgent. install.sh fills in the placeholders with this Mac's paths and writes the
+     result to ~/Library/LaunchAgents. The token is not here: start.sh reads it from the login keychain at each start. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__WORKER__/service/start.sh</string>
+    <string>__NODE__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__WORKER__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+    <key>COMBO_API_URL</key>
+    <string>__API_URL__</string>
+    <key>WORKER_VIEWER_PORT</key>
+    <string>__VIEWER_PORT__</string>
+    <key>WORKER_LOG_FILE</key>
+    <string>__LOG__</string>
+    <key>WORKER_PROFILE_DIR</key>
+    <string>__PROFILE__</string>
+  </dict>
+  <!-- Started at login, started again whenever it exits, but never more than once a minute. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+  <!-- Gives way to the Mac's own work: lower CPU and I/O priority. -->
+  <key>ProcessType</key>
+  <string>Background</string>
+  <!-- Time to release the job in hand and close Chrome when stopped. -->
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>__LOG__</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG__</string>
+</dict>
+</plist>

@@ -9,14 +9,22 @@ Plain Node, no packages: Chrome is driven over the DevTools protocol with Node's
 ## How it works
 
 1. **Its own viewer**, built once by `npm run build` and pinned to one asset release (`VITE_ASSET_RELEASE`), served by
-   the worker on `http://127.0.0.1:5321`. That port is fixed: the asset bucket's CORS allows only the viewer's local
-   ports. The assets come from `https://assets.combo.skin`.
+   the worker on `http://127.0.0.1:5321` (or `5320`, `WORKER_VIEWER_PORT`). Only these two ports: the asset bucket's
+   CORS allows only the viewer's local ports. The assets come from `https://assets.combo.skin`.
 2. **One Chrome** (headless, the GPU on, its own profile) and **one page** on `/combo?capture=1`, kept open between
-   shots so its HTTP and shader caches stay warm ([embed.md, "Capturing"](../docs/embed.md#capturing)).
-3. **The loop**: `GET /worker/me`, then `POST /worker/jobs/claim`. For each job: `cs3d:load` with the job's combo,
+   shots of a queue ([embed.md, "Capturing"](../docs/embed.md#capturing)). Chrome runs only while there's work: it is
+   checked at the start (its GPU, WebGL2, the release), closed after `WORKER_BROWSER_IDLE` seconds without a shot, and
+   started again with the next claim; while idle only Node runs, polling. The profile stays on disk, so the HTTP and
+   shader caches stay warm. On an M4 Pro, run by hand: Chrome is ready about 0.5 s after the claim and the first shot
+   after idle is stored in about 2 s (a warm shot about 0.6 s); Chrome takes about 500 MB open and up to about 800 MB
+   while drawing, Node alone about 30 MB.
+3. **A browser that dies** (killed, crashed, or its DevTools connection lost, after the Mac slept for example) is
+   closed for good and a new one started; the worker carries on. A Chrome left on the profile by a worker that was
+   killed is stopped before a new one starts.
+4. **The loop**: `GET /worker/me`, then `POST /worker/jobs/claim`. For each job: `cs3d:load` with the job's combo,
    wait for `cs3d:captureReady`, `cs3d:capture`. Then the PNG is checked (1920×1080, 8-bit, not blank or transparent),
    tagged, and sent with `PUT /worker/jobs/{job}/screenshot`. Next claim. A 204 means nothing is due.
-4. **The release** each shot was taken with goes into the PNG as `tEXt` chunks: `cs3d-release`,
+5. **The release** each shot was taken with goes into the PNG as `tEXt` chunks: `cs3d-release`,
    `cs3d-render-revision` and `combo-id`. The API keeps originals byte for byte; its public WebPs are made from the
    pixels only. The release is also in the `starting` log line and in each `rendered` line.
 
@@ -32,6 +40,8 @@ A job's seed that is null is left out, and the viewer draws its default (0). A v
 | `bad-params`, a blank or wrongly sized frame | `fail` with `render_failed` |
 | No `cs3d:captureReady` within the timeout | `fail` with `timeout`; the next job starts in a fresh page |
 | No WebGL2 in the browser | `release` with `gpu_unavailable`, and the worker stops (exit 4) |
+| The browser dies during the shot | One more try in a new browser, then `fail` with `render_failed` |
+| Chrome won't start (3 tries, 10 s apart) | `release` with `shutting_down`, and the worker stops (exit 5) |
 | Upload: 409 `inputs_changed`, 404 `job_not_found` | Logged; no report (the combo changed or was claimed again); next claim |
 | Upload: 409 `claim_expired` | Logged; no report (the expired lease already counted) |
 | Upload: 413, 415, 422 | Logged as an error (a bug in the worker); `fail` with `render_failed`, the code in the detail |
@@ -55,6 +65,9 @@ All from environment variables. The token is never written to a file in this rep
 | `COMBO_WORKER_TOKEN` | required | The worker's token from the dashboard's Screenshots page (`csw_` and 43 characters) |
 | `WORKER_RENDER_TIMEOUT` | `120` | Seconds for one combo (load and capture), 10 to 270, and always under the lease |
 | `WORKER_POLL_INTERVAL` | `60` | Seconds to wait after a 204 before claiming again (polling mode) |
+| `WORKER_BROWSER_IDLE` | `60` | Seconds without a shot before Chrome is closed (10 to 3600); the next claim starts it again |
+| `WORKER_VIEWER_PORT` | `5321` | The port the worker serves its viewer on: `5321` or `5320` (the only two the asset bucket's CORS allows) |
+| `WORKER_LOG_FILE` | stdout | A file to log to instead; moved to `<file>.1` at 5 MB, so at most two files (the service sets it) |
 | `CHROME_PATH` | the usual install | macOS `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, Windows `C:\Program Files\Google\Chrome\Application\chrome.exe`, Linux `/usr/bin/google-chrome` |
 | `WORKER_PROFILE_DIR` | `~/.cache/cs2-combo-worker/chrome-profile` | The worker's own Chrome profile (its caches); never your everyday profile |
 | `WORKER_ASSET_RELEASE` | the bucket's current | For `npm run build` only: the release to pin |
@@ -68,13 +81,15 @@ From `worker/`:
 | `npm run build` | Builds the viewer into `viewer-dist/` pinned to the current release (needs `npm ci` in `viewer/` once) |
 | `npm start` | Polls: works through the queue, then claims again every `WORKER_POLL_INTERVAL` |
 | `npm run once` | Works through the queue and exits at the first 204 |
-| `npm test` | The tests, against a fake API (no browser, no network) |
+| `npm test` | The tests, against a fake API and a fake browser (no Chrome, no network) |
 | `npm run e2e` | End to end with Chrome and the assets from R2, against the fake API ([below](#checks)) |
 | `npm run refcheck -- --refs <folder> --out <folder>` | Compares the viewer's knives with reference pictures ([below](#reference-check)) |
 
-Exit codes: 0 done, 1 unexpected error, 2 settings or token refused, 3 port 5321 in use, 4 no usable GPU.
+Exit codes: 0 done, 1 unexpected error, 2 settings or token refused, 3 the viewer's port (5321) in use, 4 no usable
+GPU, 5 Chrome can't be started.
 
-After a CS2 update and a new asset release: `npm run build` again, then restart the worker.
+After a CS2 update and a new asset release: `npm run build` again, then restart the worker (as a service:
+`service/install.sh` again).
 
 ## On the Mac
 
@@ -107,18 +122,49 @@ COMBO_API_URL=http://127.0.0.1:8000 COMBO_WORKER_TOKEN="$(security find-generic-
 `npm start` instead of `npm run once` keeps it polling until Ctrl+C. The first time, macOS may ask whether to let the
 keychain item be read by `security`: allow it. Chrome runs headless; no window opens.
 
+### Run as a service
+
+`service/install.sh` installs the worker as the LaunchAgent `skin.combo.screenshot-worker`: it starts at login,
+starts again whenever it exits (at most once a minute, so a broken setup can't spin), and runs at background
+priority (`ProcessType` `Background`), giving way to your own work. Shots are slower under it: a few seconds each.
+
+- **The token**: `service/start.sh` reads it from the login keychain at each start
+  (`security find-generic-password -a "$USER" -s combo-skin-worker -w`) and hands it to Node in its environment only:
+  it is not in the plist, any file or the log. If macOS asks whether `security` may use the item, choose
+  **Always Allow**, or each start waits for an answer. Without the item the start fails and is tried again a minute
+  later.
+- **Where it runs from**: launchd's jobs can't read `~/Documents`, `~/Desktop` or `~/Downloads` (macOS privacy
+  protection), so install copies `src/`, `service/` and `viewer-dist/` to
+  `~/Library/Application Support/combo-skin/screenshot-worker/`. **After a `git pull` or `npm run build`, run
+  `service/install.sh` again.**
+- **Settings** at install: `COMBO_API_URL` (default `http://127.0.0.1:8000`), `WORKER_VIEWER_PORT` (default `5321`),
+  `WORKER_PROFILE_DIR`, `WORKER_NODE` (default: `node` on `PATH`, 24 or later). Install records the absolute paths;
+  nothing machine-specific is in the repository.
+- **The log**: `~/Library/Logs/combo-skin/screenshot-worker.log`, moved to `.log.1` at 5 MB.
+
+From `cs2-combo-viewer/worker`, with the worker started by hand stopped first (install refuses while something holds
+port 5321):
+
+```bash
+service/install.sh      # install, or update after a pull or a build
+service/status.sh       # loaded or not, running or not, the last exit, the log's last lines (service/status.sh 50)
+service/uninstall.sh    # stop it (the job in hand is released) and remove it; the log is kept
+```
+
 ## Checks
 
 `npm test` runs the unit tests and the contract tests against `test/fake-api.mjs`, a stand-in that follows the API's
 README: tokens and 401, 403 for a request with an `Origin` header, the claim and its lease, 204, the PNG checks (413,
 415, 422 `not_png` / `wrong_size` / `bad_pixel_format`), `fail` and `release`, 409 `claim_expired` and
-`inputs_changed`, 404 `job_not_found`.
+`inputs_changed`, 404 `job_not_found`. The browser's life (started again when it dies, given up on when it won't
+start, closed when idle) is tested with `test/fake-chrome.mjs`, and the service's scripts with stand-ins for
+`launchctl`, `lsof` and `security` (nothing is loaded, the keychain isn't read).
 
-`npm run e2e` (after `npm run build`; port 5321 free) draws four combos (the reference, Big Swell, a vanilla Butterfly
-Knife, Bloody Darryl The Strapped) cold in a new browser and warm in the same one, checks each capture against the
-browser's own screenshot of the page, then runs `node src/main.mjs --once` through a queue of the four and a combo
-without seeds against the fake API. `E2E_OUT` and `E2E_PROFILES` choose where the PNGs, `timings.json` and the browser
-profiles go (default `test/.tmp/`, not in git).
+`npm run e2e` (after `npm run build`; the viewer's port free, so `WORKER_VIEWER_PORT=5320` next to a running worker)
+draws four combos (the reference, Big Swell, a vanilla Butterfly Knife, Bloody Darryl The Strapped) cold in a new
+browser and warm in the same one, checks each capture against the browser's own screenshot of the page, then runs
+`node src/main.mjs --once` through a queue of the four and a combo without seeds against the fake API. `E2E_OUT` and
+`E2E_PROFILES` choose where the PNGs, `timings.json` and the browser profiles go (default `test/.tmp/`, not in git).
 
 ## Reference check
 
