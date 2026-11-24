@@ -554,13 +554,14 @@ Status: **done** (PR #9). The contract is [embed.md](embed.md); checks and their
   `getState` (and `loseContext` with `debug=1`), each with an `id` echoed by its events. Commands sent before the page
   has loaded are kept from the first module on (`early-messages.ts`): without that, the test host's command at the
   iframe's `load` event was lost.
-- **Origins**: accepted from combo.skin, view.combo.skin, admin.combo.skin and local ports 5173, 4173, 5174, 5320,
-  5321, 5322, from the parent window only; posted only to the parent's origin (`ancestorOrigins`, else the referrer,
-  else the first allowed message). The older `/embed` (the pipeline's checks) now follows the same list; it used to
-  accept any origin and reply to `'*'`.
-- **Headers**: `frame-ancestors 'self' https://combo.skin https://admin.combo.skin http://localhost:* http://127.0.0.1:*`
-  and a CSP for the rest (`'wasm-unsafe-eval'` was needed: three.js' meshopt decoder is WebAssembly), `nosniff`,
-  referrer and permissions policies, immutable caching of `/assets/*`.
+- **Origins**: accepted from combo.skin, view.combo.skin, combo-skin.pages.dev, preview.combo-skin.pages.dev and
+  local ports 5173, 4173, 5174, 5320, 5321, 5322, from the parent window only; posted only to the parent's origin
+  (`ancestorOrigins`, else the referrer, else the first allowed message). The older `/embed` (the pipeline's checks)
+  now follows the same list; it used to accept any origin and reply to `'*'`.
+- **Headers**: `frame-ancestors 'self' https://combo.skin https://combo-skin.pages.dev
+  https://preview.combo-skin.pages.dev http://localhost:* http://127.0.0.1:*` and a CSP for the rest
+  (`'wasm-unsafe-eval'` was needed: three.js' meshopt decoder is WebAssembly), `nosniff`, referrer and permissions
+  policies, immutable caching of `/assets/*`.
 - **Context loss**: the view is thrown away (its context released with `forceContextLoss`), rebuilt on a new canvas and
   the combo loaded again; a second loss before it has loaded is reported (`context-lost`, retryable). `dispose()` now
   releases the context in the app too, so rebuilds don't pile contexts up (Chrome keeps about 16).
