@@ -27,6 +27,7 @@ import { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT
 import { cropToContent } from '@/lib/canvas'
 import { AttachmentEditor, type EditorEvents } from '@/lib/viewer/attachment-editor'
 import { drawSides } from '@/lib/viewer/item-sides'
+import { placeViewmodel } from '@/lib/viewer/viewmodel-sway'
 
 export { DEFAULT_LIGHTING, DEFAULT_MAP_LIGHTING, DEFAULT_RENDER_QUALITY, DEFAULT_VIEWMODEL, type CharmOptions, type LightSource, type Lighting, type MapLighting, type RenderQuality, type SkinViewerOptions, type StickerOptions, type Viewmodel }
 
@@ -56,12 +57,6 @@ const KEY_FROM_CAMERA = new THREE.Vector3(2.5, 3, 4)
 const RIM_FROM_CAMERA = new THREE.Vector3(-3, 1.5, -5)
 /** The orbit effect's speed (degrees per frame). */
 const ORBIT_SPEED = 0.35
-
-const INCH = 0.0254
-/** Sway: how far (radians) the weapon leans toward the pointer at the edge of the view, and how fast it follows. */
-const SWAY_YAW = 0.045
-const SWAY_PITCH = 0.03
-const SWAY_FOLLOW = 0.08
 
 /** The first-person arms and weapon, kept to pose them again (the inspect animation). */
 interface FirstPersonRig {
@@ -646,27 +641,9 @@ export class SkinViewer {
     this.updateViewmodel(performance.now() / 1000)
   }
 
-  /**
-   * Places the first-person holder: the default spot plus the offsets, mirrored for the left hand, and — with sway
-   * on — leaning toward the pointer and breathing.
-   * @param t time in seconds
-   */
+  /** Places the first-person holder (see `placeViewmodel`). @param t time in seconds */
   private updateViewmodel(t: number): void {
-    const vm = this.viewmodel
-    const side = vm.leftHanded ? 1 : -1
-    let bob = 0
-    if (vm.sway) {
-      bob = Math.sin(t * 1.7) * 0.0009
-      const r = this.holder.rotation
-      /** Applied after the mirror, so the same sign leans toward the pointer with either hand. */
-      r.y += (-this.pointer.x * SWAY_YAW - r.y) * SWAY_FOLLOW
-      r.x += (-this.pointer.y * SWAY_PITCH - r.x) * SWAY_FOLLOW
-      r.z = Math.sin(t * 0.85) * 0.006
-    } else {
-      this.holder.rotation.set(0, 0, 0)
-    }
-    this.holder.position.set(side * vm.offsetX * INCH, vm.offsetZ * INCH + bob, vm.offsetY * INCH)
-    this.holder.scale.set(vm.leftHanded ? -1 : 1, 1, 1)
+    placeViewmodel(this.holder, this.viewmodel, t, this.pointer, this.opts.pointerLean !== false)
   }
 
   setSeed(seed: number): void {
