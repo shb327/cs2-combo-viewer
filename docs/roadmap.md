@@ -841,6 +841,9 @@ the studio so the light isn't the difference. Four causes, none shared; viewer c
   (`classicGloveRolls`): 19 classic finishes place differently, among them Fade (45° to 135°), Tiger Strike, Snow
   Leopard, Queen Jaguar, Convoy, Imperial Plaid, Constrictor, the Moto prints (POW!, Boom!, Cool Mint, Smoke Out,
   Polygon, Transport, Finish Line, Blood Pressure), Omega, CAUTION! and Scarlet Shamagh (rotation fixed at the kit's 0).
+  Checked on Driver Gloves | Imperial Plaid 630 against the game's look with the same knife and pose: swept over the
+  whole offset range, each hand matched best near the rolled offset (left hand: the seed's stream, right hand: the
+  seed + 1's, both in the kit's bounds); rolled in [0, 1), the left hand was a half block off.
 - **Driver Gloves | Hand Sweaters like plastic (fixed).** Not the roughness (about 0.8 on the knit) or metalness (0):
   the material put three.js's full specular on top of the cloth sheen. The game lights cloth with its cloth lobe
   instead; cloth (the compositor's cloth output) now keeps a quarter of the specular (`CLOTH_SPECULAR`, fitted to the

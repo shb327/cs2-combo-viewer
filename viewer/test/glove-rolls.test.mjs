@@ -67,3 +67,16 @@ test('a variable rolled without bounds keeps the kit\'s value and still uses up 
   assert.equal(v.patternRot, 12)
   close(v.grunge[0], d[3])
 })
+
+// Driver Gloves | Imperial Plaid, seed 630 (its kit: offset in [0, 0.2) × [0, 0.3), rotation 0), checked against the
+// game's look of that seed with the same knife and pose: swept over the whole offset range, each hand's plaid matched
+// best near the offset these rolls give — the left hand's stream from the seed, the right hand's from the seed + 1.
+// Rolled in [0, 1) as before, the left hand's plaid sat a half block off.
+test('Imperial Plaid 630 places each hand as the game does', () => {
+  const IMPERIAL_PLAID = plan(set([[0, 0], [0.2, 0.3]], [[0], [0]]))
+  const left = classicGloveRolls(valveRandom(630), IMPERIAL_PLAID)
+  const right = classicGloveRolls(valveRandom(631), IMPERIAL_PLAID)
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-3, `${a} ≉ ${b}`)
+  near(left.pattern[0], 0.146); near(left.pattern[1], 0.247); near(left.patternRot, 0)
+  near(right.pattern[0], 0.021); near(right.pattern[1], 0.058)
+})
