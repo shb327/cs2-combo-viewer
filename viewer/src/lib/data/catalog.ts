@@ -236,10 +236,9 @@ function buildItem(item: ItemData, kit: KitData, seed = 1, only?: DrawCall): Ite
       else if (typeof v === 'number') (Number.isInteger(v) && /^(F_|g_b|g_n)/.test(k) ? vmat.ints : vmat.floats)[k] = v
     }
     for (const [k, v] of Object.entries(t)) if (v) vmat.textures[k] = v
-    const rot = kit.rolls.find((r) => /PatternTexCoordRotation/.test(r.var))
     return {
       ...common, style: 'glove', vmat, textureRoot: GAME_ROOT,
-      patternRotation: rot?.min && rot.max && rot.min[0] === rot.max[0] ? rot.min[0] : undefined,
+      rollPlan: rollPlan(kit),
       leftAttrSides,
       drawCalls: item.meshes,
     }

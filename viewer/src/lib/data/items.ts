@@ -134,8 +134,8 @@ export interface GloveItem extends BaseItem {
   vmat: string | Vmat
   /** Where the vmat's texture paths live (…/x.vtex → textureRoot + …/x.png). */
   textureRoot: string
-  /** Fixed pattern rotation in degrees (the skin's vcompmat); otherwise rolled from the seed. */
-  patternRotation?: number
+  /** Classic catalog gloves: the kit's rolls (their bounds; see classicGloveRolls). Without them, the shared bounds. */
+  rollPlan?: KitRollPlan
   /** The hands whose model material carries the "left" attribute: their g_bFlipFixup is the paint's, inverted. */
   leftAttrSides?: ('left' | 'right')[]
   /** Catalog gloves: the model's draw-call materials (names the hands). */

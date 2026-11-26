@@ -9,6 +9,7 @@ import { kitRolls, valveRandom, weaponRolls } from '@/lib/data/rng'
 import { WeaponComposite } from '@/lib/materials/composite'
 import { GloveFinish, packLayers, vmatFeatures, type Vmat } from '@/lib/materials/glove'
 import { comboSets, fallbackTexture, isSrgb, loadGloveProgram } from '@/lib/materials/glove-shared'
+import { classicTextureSrgb } from '@/lib/materials/glove-look'
 import { GloveV2Finish } from '@/lib/materials/glove2'
 import { WeaponFinish, type WeaponItem } from '@/lib/materials/weapon'
 import { loadPatchSlots, PatchLayer } from '@/lib/viewer/agent-patches'
@@ -303,8 +304,9 @@ export class ModelLoader {
     const vmat = !item ? null : typeof item.vmat === 'string' ? await (await fetch(t.url(item.vmat))).json() as Vmat : item.vmat
     /** Classic gloves: the game's compositor combo for the paint's features. */
     const classic = item && !item.v2 && vmat ? await loadGloveProgram(this.opts.assetBase, vmatFeatures(vmat)) : null
+    const patternMode = Number(vmat?.ints.g_nPatternMode ?? 0)
     const entries = !classic ? [] : await Promise.all(Object.entries(vmat!.textures).map(async ([name, path]) =>
-      [name, await t.load(item!.textureRoot + path.replace(/\.vtex$/, '.png'), isSrgb(classic, name))] as const))
+      [name, await t.load(item!.textureRoot + path.replace(/\.vtex$/, '.png'), classicTextureSrgb(name, isSrgb(classic, name), patternMode))] as const))
     const textures: Record<string, THREE.Texture> = Object.fromEntries(entries)
     if (classic) {
       const sets = comboSets(classic)

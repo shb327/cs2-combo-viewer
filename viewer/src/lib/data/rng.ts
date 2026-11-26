@@ -95,3 +95,33 @@ export function kitRolls(seed: number, plan: KitRollPlan): SeedRolls {
     wear: place('Wear'), grunge: place('Grunge'),
   }
 }
+
+/** A classic glove hand's placement: pattern offset and rotation, grunge offset and rotation (degrees). */
+export interface ClassicGloveRolls { pattern: [number, number]; patternRot: number; grunge: [number, number]; grungeRot: number }
+
+/** The four variables a classic glove kit rolls, in its vcompmat's order, with the bounds a kit inherits. */
+const CLASSIC_GLOVE_ROLLS: [string, number[], number[]][] = [
+  ['g_fPatternTexCoordOffset', [0, 0], [1, 1]],
+  ['g_fPatternTexCoordRotation', [0], [360]],
+  ['g_fGrungeTexCoordOffset', [0, 0], [1, 1]],
+  ['g_fGrungeTexCoordRotation', [0], [360]],
+]
+
+/**
+ * A classic glove's rolls from one hand's stream (gloves/paints/_shared_paint_generic.vcompmat): each variable's
+ * components in order, inside the kit's own bounds (its instance_params: Marble Fade fixes the pattern's x at 0.65,
+ * Fade turns it 45° to 135°, Crimson Kimono fixes it at 25.2°), else the shared ones. A kit lists its rolls twice,
+ * once per seed; a hand rolls one set, so the first is read. A variable without bounds keeps the kit's value and
+ * still uses up its draws, as with the weapons (kitRollValues).
+ */
+export function classicGloveRolls(r: RandomFloat, plan?: KitRollPlan): ClassicGloveRolls {
+  const [pattern, patternRot, grunge, grungeRot] = CLASSIC_GLOVE_ROLLS.map(([name, min, max]) => {
+    const roll = plan?.rolls.find((x) => x.var === name)
+    const keep = !!roll && (roll.fixed || !roll.min)
+    return min.map((_, i) => {
+      const x = r(roll?.min?.[i] ?? min[i], roll?.max?.[i] ?? max[i])
+      return keep ? plan!.fixed[name]?.[i] ?? 0 : x
+    })
+  })
+  return { pattern: [pattern[0], pattern[1]], patternRot: patternRot[0], grunge: [grunge[0], grunge[1]], grungeRot: grungeRot[0] }
+}

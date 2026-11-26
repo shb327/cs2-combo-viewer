@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { disposeMaterial } from '@/lib/viewer/dispose'
 import { texXform } from '@/lib/materials/weapon'
 import type { GloveItem } from '@/lib/data/items'
-import type { RandomFloat } from '@/lib/data/rng'
+import { classicGloveRolls, type RandomFloat } from '@/lib/data/rng'
 import { uniformValue, type ExprContext } from '@/lib/materials/composite'
 export { packLayers } from '@/lib/materials/composite'
 import type { Value } from '@/lib/materials/composite-expr'
@@ -102,18 +102,16 @@ export class GloveFinish {
   }
 
   /**
-   * The seed's rolls (gloves/paints/_shared_paint_generic.vcompmat; a kit's own instance_params only sets the bounds of the
-   * ones it names — Hedge Maze and Pandora's Box fix the rotation at 30, Crimson Kimono at 25.2): pattern offset x/y,
-   * pattern rotation, then the grunge offset x/y and rotation. The grunge is what wears the paint away, so where it
-   * wears follows the seed.
+   * The seed's rolls (gloves/paints/_shared_paint_generic.vcompmat; a kit's own instance_params set the bounds of the
+   * ones it names — Hedge Maze and Pandora's Box fix the rotation at 30, Crimson Kimono at 25.2, Marble Fade the
+   * pattern's x at 0.65; see classicGloveRolls): pattern offset x/y, pattern rotation, then the grunge offset x/y and
+   * rotation. The grunge is what wears the paint away, so where it wears follows the seed.
    * The pattern is the shader's transform (texXform; g_bFlipFixup negates the rotation, and the shader negates u) on
    * u ∈ [0, 1], and the right hand's result has its x negated (the shader's p.x *= sign(u)). This composite runs the
    * right hand on u ∈ [−1, 0], hence its +1 shift. The stream is this hand's own (see SkinViewer.setSeed).
    */
   setSeed(r: RandomFloat): void {
-    const px = r(0, 1), py = r(0, 1), prot = r(0, 360)
-    const gx = r(0, 1), gy = r(0, 1), grot = r(0, 360)
-    const rot = this.item.patternRotation ?? prot
+    const { pattern: [px, py], patternRot: rot, grunge: [gx, gy], grungeRot: grot } = classicGloveRolls(r, this.item.rollPlan)
     const flip = this.flip
     const right = this.side === 'right'
     const o = this.overrides
