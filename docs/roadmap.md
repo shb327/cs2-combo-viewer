@@ -826,8 +826,8 @@ didn't change.
 
 ## Glove looks (branch `fix-glove-looks`)
 
-Three gloves drawn wrong next to skincraft.gg's first-person views (which match the game), checked on Vertigo and in
-the studio so the light isn't the difference. Three causes, none shared; viewer code only, no asset changed.
+Four gloves drawn wrong next to skincraft.gg's first-person views (which match the game), checked on Vertigo and in
+the studio so the light isn't the difference. Four causes, none shared; viewer code only, no asset changed.
 
 - **Hydra Gloves | Case Hardened too blue, Specialist Gloves | Marble Fade red and orange (fixed).** These classic
   kits take their colour straight from the pattern texture (`g_nPatternMode` 2; also Specialist Gloves | Fade). The
@@ -846,10 +846,16 @@ the studio so the light isn't the difference. Three causes, none shared; viewer 
   instead; cloth (the compositor's cloth output) now keeps a quarter of the specular (`CLOTH_SPECULAR`, fitted to the
   sweater and to Specialist Gloves' suede palm, which went darker than the game's with none). This touches every glove
   with fabric, slightly (81 of 94 finishes; the print and placement unchanged).
+- **Driver Gloves | Plum Quill dusty mauve instead of violet (fixed).** The newer gloves' tint ids are
+  `g_vIdNColor = SrgbGammaToLinear(the paint's value)`: the colour in rgb, how strongly it covers the leather in alpha.
+  The expression evaluator converted the alpha too (Plum Quill's 0.72 to 0.47), so the violet tint lay too thin over
+  the leather. The sRGB conversions now keep a float4's alpha. Six of the 22 newer finishes change, a little (most:
+  Pillow Punchers, Violet Beadwork, Wave Chaser, Plum Quill); knives can't (their colours are rgb only). What remains
+  against skincraft (the ostrich panel a little greyer) shows on their Doppler knife too: their light, not the glove.
 
-**Checks.** All 94 glove finishes captured through `/combo?capture=1` before and after: the 13 without fabric or a
-changed placement are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell, Sunburst, Charred and
-others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
+**Checks.** All 94 glove finishes captured through `/combo?capture=1` before and after: the 11 without fabric, a
+changed placement or a tint id's cover are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell,
+Sunburst, Charred and others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
 
 ## Safari (branch `safari-fix`)
 

@@ -19,6 +19,9 @@ function map3(a: Value, b: Value, c: Value, f: (x: number, y: number, z: number)
 }
 const srgbToLinear = (x: number) => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4))
 const linearToSrgb = (x: number) => (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055)
+/** A colour conversion: every component of a scalar or rgb; a float4's alpha (coverage, not colour) is kept. */
+const colorMap = (f: (x: number) => number) => (v: Value): Value =>
+  Array.isArray(v) && v.length === 4 ? [...v.slice(0, 3).map(f), v[3]] : map1(v, f)
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
 const dot = (a: Value, b: Value, n: number) => { const A = vec(a), B = vec(b); let s = 0; for (let i = 0; i < n; i++) s += (A[i] ?? 0) * (B[i] ?? 0); return s }
 
@@ -36,7 +39,7 @@ const FUNCS: Record<string, [number, (...a: Value[]) => Value]> = {
   smoothstep: [3, (a, b, x) => map3(a, b, x, smooth)],
   float4: [4, (...a) => a.flatMap(vec).slice(0, 4)], float3: [3, (...a) => a.flatMap(vec).slice(0, 3)], float2: [2, (...a) => a.flatMap(vec).slice(0, 2)],
   time: [0, () => 0], min: [2, (a, b) => map2(a, b, Math.min)], max: [2, (a, b) => map2(a, b, Math.max)],
-  SrgbLinearToGamma: [1, (a) => map1(a, linearToSrgb)], SrgbGammaToLinear: [1, (a) => map1(a, srgbToLinear)],
+  SrgbLinearToGamma: [1, colorMap(linearToSrgb)], SrgbGammaToLinear: [1, colorMap(srgbToLinear)],
   random: [2, (a, b) => map2(a, b, (lo) => lo)],
   normalize: [1, (a) => { const v = vec(a), l = Math.hypot(...v) || 1; return v.map((x) => x / l) }],
   length: [1, (a) => Math.hypot(...vec(a))], sqr: [1, (a) => map1(a, (x) => x * x)],
