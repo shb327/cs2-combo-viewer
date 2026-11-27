@@ -824,6 +824,42 @@ Next: an in-game first-person screenshot of the Diver (above) to settle the slee
 knife in first person on Vertigo (for example Karambit | Scorched) to check metals in the combo view, which this pass
 didn't change.
 
+## Glove looks (branch `fix-glove-looks`)
+
+Four gloves drawn wrong next to skincraft.gg's first-person views (which match the game), checked on Vertigo and in
+the studio so the light isn't the difference. Four causes, none shared; viewer code only, no asset changed.
+
+- **Hydra Gloves | Case Hardened too blue, Specialist Gloves | Marble Fade red and orange (fixed).** These classic
+  kits take their colour straight from the pattern texture (`g_nPatternMode` 2; also Specialist Gloves | Fade). The
+  glove combos convert that colour from sRGB themselves (`SrgbGammaToLinear` on the sample), but the viewer also read
+  the texture as sRGB (the shader table's flag): converted twice, so pale blue and gold (`oiled.psd`) came out deep
+  blue and dark orange, Marble Fade's pink and gold red and orange. Mode 2 and 3 patterns are now read as stored; the
+  palette-mask modes (0, 1) are unchanged. The knives were right: the weapon path already reads the pattern by style.
+- **Marble Fade's colours on the wrong panels (fixed).** Classic gloves rolled the pattern offset in [0, 1) and only
+  honoured a fixed rotation; the kits' own bounds were ignored. Marble Fade fixes the pattern's x at 0.65 (its colours
+  run in vertical bands, so x picks each panel's colour). The rolls now take each kit's bounds in its order
+  (`classicGloveRolls`): 19 classic finishes place differently, among them Fade (45° to 135°), Tiger Strike, Snow
+  Leopard, Queen Jaguar, Convoy, Imperial Plaid, Constrictor, the Moto prints (POW!, Boom!, Cool Mint, Smoke Out,
+  Polygon, Transport, Finish Line, Blood Pressure), Omega, CAUTION! and Scarlet Shamagh (rotation fixed at the kit's 0).
+  Checked on Driver Gloves | Imperial Plaid 630 against the game's look with the same knife and pose: swept over the
+  whole offset range, each hand matched best near the rolled offset (left hand: the seed's stream, right hand: the
+  seed + 1's, both in the kit's bounds); rolled in [0, 1), the left hand was a half block off.
+- **Driver Gloves | Hand Sweaters like plastic (fixed).** Not the roughness (about 0.8 on the knit) or metalness (0):
+  the material put three.js's full specular on top of the cloth sheen. The game lights cloth with its cloth lobe
+  instead; cloth (the compositor's cloth output) now keeps a quarter of the specular (`CLOTH_SPECULAR`, fitted to the
+  sweater and to Specialist Gloves' suede palm, which went darker than the game's with none). This touches every glove
+  with fabric, slightly (81 of 94 finishes; the print and placement unchanged).
+- **Driver Gloves | Plum Quill dusty mauve instead of violet (fixed).** The newer gloves' tint ids are
+  `g_vIdNColor = SrgbGammaToLinear(the paint's value)`: the colour in rgb, how strongly it covers the leather in alpha.
+  The expression evaluator converted the alpha too (Plum Quill's 0.72 to 0.47), so the violet tint lay too thin over
+  the leather. The sRGB conversions now keep a float4's alpha. Six of the 22 newer finishes change, a little (most:
+  Pillow Punchers, Violet Beadwork, Wave Chaser, Plum Quill); knives can't (their colours are rgb only). What remains
+  against skincraft (the ostrich panel a little greyer) shows on their Doppler knife too: their light, not the glove.
+
+**Checks.** All 94 glove finishes captured through `/combo?capture=1` before and after: the 11 without fabric, a
+changed placement or a tint id's cover are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell,
+Sunburst, Charred and others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
+
 ## Safari (branch `safari-fix`)
 
 **Seen**: in Safari (macOS 27.2, Safari 27.2, Apple M4 Pro) every composited finish drew wrong; Chrome on the same Mac

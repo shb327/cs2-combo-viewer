@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { disposeMaterial } from '@/lib/viewer/dispose'
 import { SHADER_DIR, comboId, fallbackTexture, loadCombo, type ComboInfo, type CompositeTable } from '@/lib/materials/composite'
+import { GLOVE_RESOLVE, gloveMaterialParameters } from '@/lib/materials/glove-look'
 
 /**
  * The game's glove compositor (csgo_customglove), as the asset pipeline exports it: one table (customglove.json:
@@ -103,37 +104,13 @@ export function safeEmboss(frag: string): string {
   return patched.replace('void main()', 'vec3 safeNormalize(vec3 v) { float l = length(v); return l > 1e-12 ? v / l : vec3(0.0, 0.0, 1.0); }\n\nvoid main()')
 }
 
-/** The game's outputs (one render target per F_OUTPUT_MODE) → albedo, normal map, ORM, sheen color (pre-linearized values undone). */
-export const RESOLVE = `precision highp float;
-uniform sampler2D uAlbedo; uniform sampler2D uNormal; uniform sampler2D uMetal; uniform sampler2D uAo;
-in vec2 vUv;
-layout(location = 0) out vec4 oAlbedo;
-layout(location = 1) out vec4 oNormal;
-layout(location = 2) out vec4 oOrm;
-layout(location = 3) out vec4 oCloth;
-float cv(float l) { return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055; }
-void main() {
-  vec3 albedo = texture(uAlbedo, vUv).rgb;
-  vec4 n = texture(uNormal, vUv);
-  // hemi-octahedral normal (x, y) → vector; the composite flips y for its normal output.
-  float a = cv(n.x) * 2.0 - 1.0, b = cv(n.y) * 2.0 - 1.0;
-  vec2 p = vec2(a + b, a - b) * 0.5;
-  vec3 nn = normalize(vec3(p, 1.0 - abs(p.x) - abs(p.y)));
-  vec4 m = texture(uMetal, vUv);
-  float cloth = cv(m.z);
-  oAlbedo = vec4(albedo, 1.0);
-  oNormal = vec4(vec3(nn.x, -nn.y, nn.z) * 0.5 + 0.5, 1.0);
-  oOrm = vec4(cv(texture(uAo, vUv).x), cv(n.z), cv(m.y), 1.0);
-  oCloth = vec4(albedo * clamp(cloth, 0.0, 1.0), 1.0);
-}`
-
 export const QUAD_VS = `in vec3 position;
 in vec2 uv;
 out vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`
 
 /**
- * The four per-mode targets the game's shader renders into and the 4-output target RESOLVE packs them into, with the
+ * The four per-mode targets the game's shader renders into and the 4-output target GLOVE_RESOLVE packs them into, with the
  * MeshPhysicalMaterial reading it. Shared by the classic and the newer gloves.
  */
 export class GloveTargets {
@@ -148,7 +125,7 @@ export class GloveTargets {
     })
     this.modes = [rt(), rt(), rt(), rt()]
     this.resolve = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3, vertexShader: QUAD_VS, fragmentShader: RESOLVE, depthTest: false, depthWrite: false,
+      glslVersion: THREE.GLSL3, vertexShader: QUAD_VS, fragmentShader: GLOVE_RESOLVE, depthTest: false, depthWrite: false,
       uniforms: {
         uAlbedo: { value: this.modes[0].texture }, uNormal: { value: this.modes[1].texture },
         uMetal: { value: this.modes[2].texture }, uAo: { value: this.modes[3].texture },
@@ -161,10 +138,8 @@ export class GloveTargets {
     const [albedo, normal, orm, cloth] = this.target.textures
     /** The resolve writes linear albedo: stored as sRGB (SRGB8_ALPHA8), so dark tones don't band as in 8-bit linear. */
     albedo.colorSpace = THREE.SRGBColorSpace
-    this.material = new THREE.MeshPhysicalMaterial({
-      map: albedo, normalMap: normal, aoMap: orm, roughnessMap: orm, metalnessMap: orm, roughness: 1, metalness: 1,
-      sheen: 1, sheenColor: new THREE.Color(1, 1, 1).multiplyScalar(Math.min(1, sheenScale * 0.5)), sheenColorMap: cloth, sheenRoughness: 0.6,
-    })
+    const { sheenColor, ...parameters } = gloveMaterialParameters({ albedo, normal, orm, cloth }, sheenScale)
+    this.material = new THREE.MeshPhysicalMaterial({ ...parameters, sheenColor: new THREE.Color(sheenColor, sheenColor, sheenColor) })
   }
 
   /** The game's shader once per output mode (albedo, normal, metalness, AO), then the resolve. */
