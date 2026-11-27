@@ -856,6 +856,14 @@ the studio so the light isn't the difference. Four causes, none shared; viewer c
   Pillow Punchers, Violet Beadwork, Wave Chaser, Plum Quill); knives can't (their colours are rgb only). What remains
   against skincraft (the ostrich panel a little greyer) shows on their Doppler knife too: their light, not the glove.
 
+- **The newer gloves worn too much (fixed later, branch `fix-glove-wear`).** Their `g_fWearProgress` is the game's
+  expression `SrgbLinearToGamma(g_fWearProgress)`, but the viewer passed the float already raised to 1/2.2 (from
+  before the gloves ran on the game's compositor), so it was encoded twice: float 0.06 reached the shader as 0.56
+  instead of 0.27, and gloves near factory new looked scuffed and grimy (Plum Quill, Hand Sweaters). The float now goes
+  in as it is; through the expression it gives the values skinshotter's composites show (0.15, 0.37, 0.6 → 0.42, 0.64,
+  0.79). All 22 newer finishes change (light ones lighter, dark ones darker: less grime and bleaching). Classic gloves
+  set their wear past the expression (the kit's exponent only); whether the game encodes theirs too is not checked.
+
 **Checks.** All 94 glove finishes captured through `/combo?capture=1` before and after: the 11 without fabric, a
 changed placement or a tint id's cover are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell,
 Sunburst, Charred and others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
