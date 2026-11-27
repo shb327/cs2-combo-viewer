@@ -41,7 +41,7 @@ All paths inside the JSON are relative to `extracted/game/` unless noted. Every 
   or an `<img>` where the browser ignores that option (Safari and every iOS browser; checked at runtime by
   `bitmapsKeepAlpha()` in `lib/viewer/textures.ts`; see the roadmap, "Safari").
 - Float textures (the weapons' position maps) are `.exr`, loaded as is.
-- sRGB or linear is decided by the caller: base colours, grunge and AO are sRGB; normals, masks, roughness, wear are linear. For the compositing shaders, each texture follows the shader's own `SrgbRead` flag (`ps[name].srgb` in the shader table), the pattern being sRGB only for paint styles 6 and up. A classic glove's pattern is read as stored when it is the colour (`g_nPatternMode` 2 and 3: Case Hardened, Fade, Marble Fade), since those combos convert it from sRGB themselves (`lib/materials/glove-look.ts`).
+- sRGB or linear is decided by the caller: base colours, grunge and AO are sRGB; normals, masks, roughness, wear are linear. Normal textures are RGB normals as VRF decodes them (x, y, z, green pointing up the image), roughness in alpha where packed. For the compositing shaders, each texture follows the shader's own `SrgbRead` flag (`ps[name].srgb` in the shader table), the pattern being sRGB only for paint styles 6 and up. A classic glove's pattern is read as stored when it is the colour (`g_nPatternMode` 2 and 3: Case Hardened, Fade, Marble Fade), since those combos convert it from sRGB themselves (`lib/materials/glove-look.ts`).
 - Classic glove kits keep their material's `.vtex` paths; the viewer swaps `.vtex` for `.png`.
 
 ## `index.json`
@@ -132,6 +132,9 @@ Instr = [byteOffset, op, ...args]   // the game's parameter expressions, run by 
 - Combo id: mixed radix over `static`, 9 values for `S_PAINT_STYLE`, 2 for every other (the game's own numbering).
 - Fragment shaders: GLSL ES 3.00 without `#version`, plain `uniform` declarations, one output, inputs named as `combo.inputs` (the vertex shaders are rebuilt in the viewer's code). Layer families of 4 textures (glove detail, grunge, damage…) are packed into `sampler2DArray`s to stay under WebGL's 16 textures.
 - The glove compositor runs once per output mode (albedo, normal, metalness, AO) and is resolved into the material's maps (`lib/materials/glove-shared.ts`, `glove-look.ts`): where its cloth output says the glove is fabric, the material keeps a quarter of its specular and lights it with the sheen.
+- The glove compositor decodes its normal inputs hemi-octahedral, as the game stores them (from r and g; from a and g
+  for the newer gloves' surface and substrate normals), but the export writes them as RGB normals: each sample is
+  re-encoded to that layout as it is read (`gloveNormalInputs` in `lib/materials/glove-look.ts`).
 
 ## `agents.json`
 

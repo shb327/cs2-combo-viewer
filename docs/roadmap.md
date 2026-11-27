@@ -868,6 +868,43 @@ the studio so the light isn't the difference. Four causes, none shared; viewer c
 changed placement or a tint id's cover are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell,
 Sunburst, Charred and others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
 
+## Glove relief (branch `fix-glove-relief`)
+
+Driver Gloves | Plum Quill's quills were drawn as pits instead of raised dots (in the game each is lit on top, with a
+small shadow below), on Vertigo and in the studio alike: not the light. Viewer code only, no asset changed.
+
+- **The compositor read RGB normals as hemi-octahedral (fixed).** The export writes the game's normal textures as
+  plain RGB normals (VRF decodes them: x, y, z, green pointing up the image; the glove, textile and knife normals are
+  unit length with blue near 1, and curl-free only with green up). The glove compositor decodes each of its normal
+  inputs as the game stores them, hemi-octahedral: `x + y - 1` and `x - y` from r and g (the glove model's normal, the
+  classic gloves' detail and damage normals) or from a and g (the newer gloves' surface and substrate normals). An RGB
+  normal read so comes out mirrored across a diagonal and flattened: a dot's upper side faced down and to the right, so
+  a light from above lit its lower side. Every normal sample in the compositor is now re-encoded to that layout as it
+  is read (`gloveNormalInputs`, `lib/materials/glove-look.ts`), so its blends and decodes see what they do in the game.
+- **Not the direction of the final map.** The compositor's y points up the image (its emboss builds its position from
+  `1 - v`), and three.js reads the map's green along the bitangent `cross(N, T) · w`, which on the glove, knife and arm
+  models points down the image (on all but a handful of their triangles): the resolve's y negation was right and stays.
+- **Not precision**: the composites are half-float targets, and the resolve's decode is exact.
+
+**Checks.** All 94 glove finishes captured through `/combo?capture=1` before and after (Karambit | Doppler (Ruby),
+seed 1, float 0.15 or the kit's nearest): all 94 change, the gloves alone (9 to 13% of the frame; the knife, arms and background stay pixel-identical),
+since every glove reads its model's own normal through the compositor; no glove has no relief. Knives alone
+(`view=orbit`: Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened, vanilla Flip and Classic, the last two with their
+own normal maps) are byte-identical, as is a second capture of the same build. Combo Skin's screenshots of every glove
+need redrawing: the worker's `RENDER_REVISION` is 4.
+
+Found, not changed:
+
+- **The knives' own normal maps and the agents' arms read upside down.** The knife path and the arms' plain material
+  give three.js the model's normal texture as it is (no `normalScale`), but those textures have green up the image too
+  and the models' bitangent points down it, so their relief is mirrored top to bottom: the six knives with their own
+  normal maps (Paracord, Classic, Flip, Nomad, Huntsman, Ursus; the others use a flat default) and the arms (checked on
+  Ricksaw's arm and default gloves). The stickers' code already negates y for this reason. For a branch of its own.
+- **The newer gloves' roughness.** In the game their surface and substrate normals also carry two roughness values (r
+  and b, which the compositor reads as roughness); the export wrote the normal's x and z there, so the compositor takes
+  those as roughness. The PNG's alpha looks like roughness (Plum Quill's leather is more matte and closer to the game's
+  read from it), but what VRF writes there isn't checked.
+
 ## Safari (branch `safari-fix`)
 
 **Seen**: in Safari (macOS 27.2, Safari 27.2, Apple M4 Pro) every composited finish drew wrong; Chrome on the same Mac
