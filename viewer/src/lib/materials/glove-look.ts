@@ -16,6 +16,60 @@ export function classicTextureSrgb(name: string, tableSrgb: boolean, patternMode
 }
 
 /**
+ * Where the glove compositor finds each normal texture's two encoded channels. The game stores its normals
+ * hemi-octahedral and the compositor decodes them so: x + y - 1 and x - y from r and g, or from a and g for the newer
+ * gloves' surface and substrate normals (their r and b hold other data).
+ */
+export const GLOVE_NORMAL_LAYOUT: Record<string, 'xy' | 'wy'> = {
+  g_tNormal: 'xy', g_tDetailNormal: 'xy', g_tDamageNormal: 'xy', g_tSurfaceNormal: 'wy', g_tSubstrateNormal: 'wy',
+}
+
+/**
+ * An RGB normal texel (as the export writes the game's normal textures: x, y, z, green pointing up the image) → the
+ * game's two hemi-octahedral channels, which its decode turns back into the same normal. Scalar statements, written once
+ * for the GLSL (and run as they are by the tests).
+ */
+export const HEMI_OCT_STEPS: [string, string][] = [
+  ['x', 'r * 2.0 - 1.0'], ['y', 'g * 2.0 - 1.0'], ['z', 'max(b * 2.0 - 1.0, 0.0)'],
+  ['l', 'max(abs(x) + abs(y) + z, 0.000001)'],
+  // 128/255 is the game's zero: its decode subtracts 1.00392162 (256/255) from the sum of the two.
+  ['e1', '(x + y) / l * 0.5 + 0.50196078'], ['e2', '(x - y) / l * 0.5 + 0.50196078'],
+]
+
+const HEMI_OCT_GLSL = `vec2 hemiOct(vec3 c) {
+  float r = c.r, g = c.g, b = c.b;
+${HEMI_OCT_STEPS.map(([name, expr]) => `  float ${name} = ${expr};`).join('\n')}
+  return vec2(e1, e2);
+}
+vec4 normalXY(vec4 t) { return vec4(hemiOct(t.rgb), t.ba); }
+vec4 normalWY(vec4 t) { vec2 e = hemiOct(t.rgb); return vec4(t.r, e.y, t.b, e.x); }
+`
+
+/**
+ * The export writes the game's normal textures as plain RGB normals, but the glove compositor decodes its normal inputs
+ * as the game stores them (GLOVE_NORMAL_LAYOUT). Read straight, an RGB normal comes out mirrored across a diagonal and
+ * flattened: raised dots (Driver Gloves | Plum Quill's quills) lit from below, like pits. Every sample of a normal
+ * texture is re-encoded to the game's layout, so the compositor's blends and decodes see what they do in the game.
+ */
+export function gloveNormalInputs(frag: string): string {
+  const call = new RegExp(`\\b(?:texture|textureGrad|textureLod)\\((${Object.keys(GLOVE_NORMAL_LAYOUT).join('|')})\\b`, 'g')
+  let out = '', from = 0
+  for (let m = call.exec(frag); m; m = call.exec(frag)) {
+    let depth = 0, end = m.index + m[0].length - m[1].length - 1
+    for (; end < frag.length; end++) {
+      if (frag[end] === '(') depth++
+      else if (frag[end] === ')' && --depth === 0) break
+    }
+    const wrap = GLOVE_NORMAL_LAYOUT[m[1]] === 'wy' ? 'normalWY' : 'normalXY'
+    out += frag.slice(from, m.index) + `${wrap}(${frag.slice(m.index, end + 1)})`
+    from = end + 1
+    call.lastIndex = from
+  }
+  if (!from) return frag
+  return (out + frag.slice(from)).replace('void main()', HEMI_OCT_GLSL + '\nvoid main()')
+}
+
+/**
  * The share of the usual specular that cloth keeps. The game lights cloth with its cloth lobe instead (F_CLOTH_SHADING);
  * three.js's sheen stands in for it, darker at grazing angles, so a quarter of the specular is kept: fitted to the
  * game's pictures of Driver Gloves | Hand Sweaters (all of it: shiny like plastic) and Specialist Gloves' suede palm
@@ -39,7 +93,8 @@ float cv(float l) { return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4
 void main() {
   vec3 albedo = texture(uAlbedo, vUv).rgb;
   vec4 n = texture(uNormal, vUv);
-  // hemi-octahedral normal (x, y) → vector; the composite flips y for its normal output.
+  // hemi-octahedral normal (x, y) → vector. Its y points up the image; three.js reads green along the glove models'
+  // bitangent, which points down it: y is negated.
   float a = cv(n.x) * 2.0 - 1.0, b = cv(n.y) * 2.0 - 1.0;
   vec2 p = vec2(a + b, a - b) * 0.5;
   vec3 nn = normalize(vec3(p, 1.0 - abs(p.x) - abs(p.y)));

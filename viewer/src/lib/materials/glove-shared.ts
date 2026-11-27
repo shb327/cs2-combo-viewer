@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { disposeMaterial } from '@/lib/viewer/dispose'
 import { SHADER_DIR, comboId, fallbackTexture, loadCombo, type ComboInfo, type CompositeTable } from '@/lib/materials/composite'
-import { GLOVE_RESOLVE, gloveMaterialParameters } from '@/lib/materials/glove-look'
+import { GLOVE_RESOLVE, gloveMaterialParameters, gloveNormalInputs } from '@/lib/materials/glove-look'
 
 /**
  * The game's glove compositor (csgo_customglove), as the asset pipeline exports it: one table (customglove.json:
@@ -36,7 +36,7 @@ export async function loadGloveProgram(base: string, features: Record<string, nu
   const loaded = await loadCombo(base, table, 'cg', id)
   if (!loaded) throw new Error(`Glove combo ${id} not exported (run the pipeline's shader steps)`)
   let frag = fragCache.get(id)
-  if (frag === undefined) { frag = safeEmboss(loaded.frag); fragCache.set(id, frag) }
+  if (frag === undefined) { frag = safeEmboss(gloveNormalInputs(loaded.frag)); fragCache.set(id, frag) }
   return { table, id, combo: loaded.combo, frag }
 }
 
