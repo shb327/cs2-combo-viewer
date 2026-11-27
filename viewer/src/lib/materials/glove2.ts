@@ -6,6 +6,7 @@ import type { KitRollPlan } from '@/lib/data/catalog'
 import { evalExpr, uniformValue, type CompositeTable, type ExprContext } from '@/lib/materials/composite'
 import { GLOVE_VS_TYPES, GloveTargets, comboSets, fallbackTexture, gloveVertexShader, isSrgb, loadGloveProgram, vsUniform, type GloveProgram } from '@/lib/materials/glove-shared'
 import { packLayers } from '@/lib/materials/glove'
+import { gloveV2WearParam } from '@/lib/materials/glove-look'
 
 type Params = Record<string, number | boolean | number[] | string>
 
@@ -78,12 +79,9 @@ export class GloveV2Finish {
     this.material = this.targets.material
   }
 
-  /**
-   * The wear the compositor sees is the float raised to 1/2.2 (gamma-encoded): matched against skinshotter's
-   * composites (Brocade Flowers at 0.15 / 0.37 / 0.6 ≙ 0.42 / 0.64 / 0.79 of the raw value).
-   */
+  /** The float as the wear; the shader's expression gamma-encodes it (see gloveV2WearParam). */
   setFloat(f: number): void {
-    const wear = Math.pow(Math.max(0, f), 1 / 2.2)
+    const wear = gloveV2WearParam(f)
     this.overrides.g_flWearAmount = wear
     this.overrides.g_fWearProgress = wear
     this.dirty = true

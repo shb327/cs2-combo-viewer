@@ -66,3 +66,10 @@ export function gloveMaterialParameters<T>(maps: GloveMaps<T>, sheenScale: numbe
     specularIntensityMap: maps.cloth,
   }
 }
+
+/**
+ * A newer glove's g_fWearProgress (and g_flWearAmount) for a float: the float as it is. The shader's own expression
+ * (SrgbLinearToGamma) encodes it: 0.15, 0.37 and 0.6 reach the composite as 0.42, 0.64 and 0.79, as skinshotter's
+ * composites of Brocade Flowers show. Encoded here as well, the wear doubled near factory new (0.06 drawn at 0.56).
+ */
+export const gloveV2WearParam = (float: number): number => Math.max(0, float)
