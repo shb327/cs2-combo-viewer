@@ -868,6 +868,23 @@ the studio so the light isn't the difference. Four causes, none shared; viewer c
 changed placement or a tint id's cover are unchanged (under 0.05% of the frame differs; Vice, Nocts, Big Swell,
 Sunburst, Charred and others), and knives alone are pixel-identical (Karambit | Doppler (Ruby), M9 Bayonet | Case Hardened). Combo Skin's screenshots of the changed gloves need redrawing.
 
+## Knife and arm relief (branch `fix-knife-normals`)
+
+The knives' own normal maps and the arms' (and the agents') had their relief mirrored top to bottom: Paracord Knife's
+cord lit from below, the arms' pores raised. Viewer code only, no asset changed.
+
+- **Cause.** The export writes the game's normal textures as RGB normals with green pointing up the image. three.js
+  reads a normal map's green along the bitangent `cross(N, T) · w`, which on every exported model points down the image
+  (checked on all 20 knives, the gloves, the first-person arms and an agent: all but a handful of triangles). The knife
+  finishes, the models' plain material (arms, agents, unfinished parts) and the charms handed three.js those textures as
+  they are. They now read them with green negated (`gameNormalScale`, `lib/materials/normal-map.ts`). The gloves keep
+  the default scale: their resolve already writes the map for three.js's frame.
+- **Checks.** Knives alone (`view=orbit`): the six with their own normal maps (Paracord, Classic, Flip, Nomad, Huntsman,
+  Ursus) change, up to 0.5% of the frame by more than 8 levels; those on the flat default (Karambit, M9 Bayonet) change
+  by a level or two (128 is not exactly zero). All 94 glove combos change, on the arms only (and the knife by a level or
+  two): no change on the gloves in the changed-pixel masks. Charms and pins aren't in the published release, so their models weren't
+  checked; they come from the same export. The worker's `RENDER_REVISION` is 5.
+
 ## Glove relief (branch `fix-glove-relief`)
 
 Driver Gloves | Plum Quill's quills were drawn as pits instead of raised dots (in the game each is lit on top, with a
@@ -899,7 +916,7 @@ Found, not changed:
   give three.js the model's normal texture as it is (no `normalScale`), but those textures have green up the image too
   and the models' bitangent points down it, so their relief is mirrored top to bottom: the six knives with their own
   normal maps (Paracord, Classic, Flip, Nomad, Huntsman, Ursus; the others use a flat default) and the arms (checked on
-  Ricksaw's arm and default gloves). The stickers' code already negates y for this reason. For a branch of its own.
+  Ricksaw's arm and default gloves). The stickers' code already negates y for this reason. Fixed on its own branch (Knife and arm relief, above).
 - **The newer gloves' roughness.** In the game their surface and substrate normals also carry two roughness values (r
   and b, which the compositor reads as roughness); the export wrote the normal's x and z there, so the compositor takes
   those as roughness. The PNG's alpha looks like roughness (Plum Quill's leather is more matte and closer to the game's
