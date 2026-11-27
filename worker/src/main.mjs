@@ -10,7 +10,7 @@ import { PortInUseError, serveViewer } from './server.mjs'
 import { createWorker, FatalError } from './worker.mjs'
 
 /** The look of combos this worker draws; Combo Skin's RENDER_REVISION (screenshots/inputs.py) is raised with it. */
-export const RENDER_REVISION = 1
+export const RENDER_REVISION = 2
 
 // WORKER_LOG_FILE: the log goes to that file (moved to .1 at 5 MB) instead of stdout; the macOS service sets it.
 const logFile = process.env.WORKER_LOG_FILE?.trim()
