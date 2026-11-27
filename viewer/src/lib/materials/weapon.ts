@@ -3,6 +3,7 @@ import { addedUniforms, disposeMaterial } from '@/lib/viewer/dispose'
 import type { AirbrushItem, BareItem, CompositeItem, CustomPaintItem, MulticolorItem, PaintStyleItem, Rgb } from '@/lib/data/items'
 import { COMPOSITE_ROUGH_GLSL, type WeaponComposite } from '@/lib/materials/composite'
 import { kitRollValues, type SeedRolls, type Placement } from '@/lib/data/rng'
+import { gameNormalScale } from '@/lib/materials/normal-map'
 import { STICKER_GLSL, STICKER_MAX, setStickerUniforms, stickerUniforms, type StickerDef, type StickerTextures } from '@/lib/materials/sticker'
 import { AIRBRUSH_DEBUG_EXPR, DEBUG_EXPR, DEBUG_VIEWS, PAINT_HELPERS_GLSL, STYLE_GLSL } from '@/lib/materials/weapon-glsl'
 
@@ -132,7 +133,7 @@ export class WeaponFinish {
 
     this.material = new THREE.MeshPhysicalMaterial({
       specularIntensity: 0.5,
-      map: tex.base, normalMap: tex.normal, aoMap: srcRough ? null : tex.orm,
+      map: tex.base, normalMap: tex.normal, normalScale: gameNormalScale(), aoMap: srcRough ? null : tex.orm,
       roughnessMap: srcRough ? tex.rough : tex.orm, metalnessMap: srcRough ? tex.rough : tex.orm,
       roughness: 1, metalness: 1,
     })

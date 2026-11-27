@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { CHARM_PATTERN_MAX, type CharmMaterial } from '@/lib/data/attachments'
 import type { TextureSource } from '@/lib/viewer/textures'
+import { gameNormalScale } from '@/lib/materials/normal-map'
 import { STICKER_GLSL, setStickerUniforms, stickerUniforms, type StickerDef, type StickerTextures } from '@/lib/materials/sticker'
 
 export interface CharmPart {
@@ -137,7 +138,7 @@ export async function charmMaterial(def: CharmMaterial, t: TextureSource, liquid
   if (glitterN) { glitterN.minFilter = glitterN.magFilter = THREE.NearestFilter; glitterN.generateMipmaps = false; glitterN.needsUpdate = true }
   const material = new THREE.MeshPhysicalMaterial({
     map: map ?? null, roughnessMap: rough ?? null, metalnessMap: rough ?? null, roughness: 1, metalness: rough ? 1 : 0,
-    normalMap: normal ?? null, aoMap: ao ?? null,
+    normalMap: normal ?? null, normalScale: gameNormalScale(), aoMap: ao ?? null,
   })
   if (liquid) {
     material.roughness = num(p.g_flLiquidRoughness, 0.3)

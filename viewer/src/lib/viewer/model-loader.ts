@@ -11,6 +11,7 @@ import { GloveFinish, packLayers, vmatFeatures, type Vmat } from '@/lib/material
 import { comboSets, fallbackTexture, isSrgb, loadGloveProgram } from '@/lib/materials/glove-shared'
 import { classicTextureSrgb } from '@/lib/materials/glove-look'
 import { GloveV2Finish } from '@/lib/materials/glove2'
+import { gameNormalScale } from '@/lib/materials/normal-map'
 import { WeaponFinish, type WeaponItem } from '@/lib/materials/weapon'
 import { loadPatchSlots, PatchLayer } from '@/lib/viewer/agent-patches'
 import { adoptAncestors, anchorTorsoToArms, SkinnedGeometry, type ArmsSkeleton, type InspectClip, type RigPart, type WeaponRig } from '@/lib/viewer/firstperson'
@@ -156,7 +157,7 @@ export class ModelLoader {
    */
   plainMaterial(call: DrawCall): THREE.Material {
     const character = call.shader === 'csgo_character.vfx'
-    const m = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 1, name: call.material.split('/').pop() })
+    const m = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 1, normalScale: gameNormalScale(), name: call.material.split('/').pop() })
     if (call.tint) m.color.setRGB(call.tint[0], call.tint[1], call.tint[2], THREE.SRGBColorSpace)
     const t = this.textures
     const set = (key: 'map' | 'normalMap' | 'roughnessMap' | 'aoMap', path: string | null | undefined, srgb: boolean) => {
